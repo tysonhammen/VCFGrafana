@@ -10,6 +10,8 @@ Exposes:
 """
 
 import logging
+import os
+import sys
 import time
 from typing import Any, Optional
 
@@ -303,9 +305,24 @@ class VCenterCollector:
                     points = fallback
                     logger.debug("Performance from PerformanceManager fallback: %d points", len(points))
                 else:
-                    logger.info(
-                        "PerformanceManager fallback returned no data. Install pyvmomi for host/VM metrics: pip install pyvmomi"
-                    )
+                    if getattr(perf_manager, "HAS_PYVMOMI", False):
+                        logger.info(
+                            "PerformanceManager fallback returned no data (pyvmomi is installed; "
+                            "connection or query may have failed). Set LOG_LEVEL=DEBUG for details."
+                        )
+                    else:
+                        pip_hint = "pip install pyvmomi"
+                        try:
+                            exe = getattr(sys, "executable", "") or ""
+                            if ".venv" in exe or "venv" in exe:
+                                bindir = os.path.dirname(exe)
+                                pip_hint = os.path.join(bindir, "pip") + " install pyvmomi"
+                        except Exception:
+                            pass
+                        logger.info(
+                            "PerformanceManager fallback returned no data. Install pyvmomi for host/VM metrics: %s",
+                            pip_hint,
+                        )
             except Exception as e:
                 logger.debug("PerformanceManager fallback failed: %s", e, exc_info=True)
 

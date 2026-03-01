@@ -139,7 +139,7 @@ def query_performance(
             disableSslCertValidation=not verify_ssl,
         )
     except Exception as e:
-        logger.debug("PerformanceManager SmartConnect failed: %s", e)
+        logger.info("PerformanceManager SmartConnect failed: %s", e)
         return []
     if si is None:
         return []
