@@ -151,7 +151,7 @@ def query_performance(
         counter_map = _build_counter_map(perf_manager)
         id_to_name: dict[int, str] = {v: k for k, v in counter_map.items()}
         if not counter_map:
-            logger.debug("PerformanceManager: no perfCounter list")
+            logger.info("PerformanceManager: no perfCounter list from vCenter (performance counters may be disabled)")
             return []
 
         results: list[tuple[str, str, str, float]] = []
@@ -182,7 +182,7 @@ def query_performance(
                 )
                 query_result = perf_manager.QueryPerf(querySpec=[spec])
             except Exception as e:
-                logger.debug("QueryPerf %s %s failed: %s", rtype, rid, e)
+                logger.info("PerformanceManager QueryPerf failed for %s %s: %s", rtype, rid, e)
                 continue
             if not query_result:
                 continue
@@ -203,6 +203,11 @@ def query_performance(
                             results.append((rtype, rid, metric_safe, float(vals[0])))
                         except (TypeError, ValueError):
                             pass
+        if not results and entities_specs:
+            logger.info(
+                "PerformanceManager: connected but no metrics returned (QueryPerf returned no data for %d host/VMs)",
+                len(entities_specs),
+            )
     finally:
         try:
             Disconnect(si)
