@@ -24,6 +24,32 @@ VSTATS_METRICS_HOST = ["cpu.usage", "mem.usage", "cpu.util"]
 VSTATS_METRICS_VM = ["cpu.usage", "mem.usage", "cpu.util"]
 
 
+def _log_perf_failure(step: str, e: "VCenterAPIError") -> None:
+    """Log performance collection failure with a clear cause."""
+    code = e.status_code or 0
+    if code == 401:
+        logger.info(
+            "vStats %s not available (HTTP 401 Unauthorized). "
+            "REST session for /api/stats/* may be missing or expired; check logs for 'REST session'.",
+            step,
+        )
+    elif code == 404:
+        logger.info(
+            "vStats %s not available (HTTP 404). "
+            "Stats API may not be enabled on this vCenter or version.",
+            step,
+        )
+    elif code == 400:
+        logger.info(
+            "vStats %s not available (HTTP 400 Bad Request). "
+            "Request parameters may be unsupported by this vCenter.",
+            step,
+        )
+    else:
+        logger.info("vStats %s not available (HTTP %s), skipping performance.", step, code)
+    logger.debug("vStats %s error: %s", step, (e.response_text or str(e))[:500])
+
+
 class VCenterCollector:
     """
     Prometheus collector that queries vCenter REST API and exposes
@@ -227,8 +253,7 @@ class VCenterCollector:
         try:
             available = self.client.get_vstats_metrics()
         except VCenterAPIError as e:
-            logger.info("vStats metrics not available (HTTP %s), skipping performance. Set LOG_LEVEL=DEBUG and LOG_FILE for details.", e.status_code)
-            logger.debug("vStats metrics error: %s", e.response_text[:500] if e.response_text else e)
+            _log_perf_failure("metrics", e)
             return
         if not available:
             logger.debug("vStats metrics: empty list, skipping performance")
@@ -247,8 +272,7 @@ class VCenterCollector:
                 metrics=metrics_to_use,
             )
         except VCenterAPIError as e:
-            logger.info("vStats data not available (HTTP %s), skipping performance. Set LOG_LEVEL=DEBUG and LOG_FILE for details.", e.status_code)
-            logger.debug("vStats data error: %s", e.response_text[:500] if e.response_text else e)
+            _log_perf_failure("data", e)
             return
 
         points = self._parse_vstats_data(data)

@@ -76,6 +76,7 @@ class VCenterClient:
 
         self._client: Any = None
         self._session: Optional[requests.Session] = None
+        self._rest_session: Optional[requests.Session] = None  # for GET /api/stats/* (vmware-api-session-id)
         self._connect()
 
     def _connect(self) -> None:
@@ -100,14 +101,42 @@ class VCenterClient:
             session=session,
         )
         self._session = session
+        self._create_rest_session()
         logger.debug("vCenter SDK client connected")
 
+    def _create_rest_session(self) -> None:
+        """Create a REST session for GET /api/stats/* (SDK uses POST /api; stats need vmware-api-session-id)."""
+        s = requests.Session()
+        s.verify = self.verify_ssl
+        s.auth = (self.user, self.password)
+        resp = s.post(f"{self.server}/api/session", timeout=30)
+        if resp.status_code != 201:
+            logger.warning("Could not create REST session for stats API: %s (performance metrics may be unavailable)", resp.status_code)
+            return
+        s.auth = None
+        s.headers["vmware-api-session-id"] = resp.json()
+        self._rest_session = s
+        logger.debug("REST session created for stats API")
+
+    def _ensure_rest_session(self) -> Optional[requests.Session]:
+        if self._rest_session is None:
+            self._create_rest_session()
+        return self._rest_session
+
     def _get(self, path: str, params: Optional[dict] = None) -> Any:
-        """GET request using the SDK session (for stats API). Returns JSON."""
-        if self._session is None:
-            self._connect()
+        """GET request using REST session (stats API requires vmware-api-session-id). Returns JSON."""
+        rest = self._ensure_rest_session()
+        if rest is None:
+            raise VCenterAPIError("REST session for stats API not available", status_code=0, response_text="")
         url = f"{self.server}{path}"
-        resp = self._session.get(url, params=params, timeout=60)
+        resp = rest.get(url, params=params, timeout=60)
+        if resp.status_code == 401:
+            logger.debug("Stats API returned 401, refreshing REST session")
+            self._rest_session = None
+            self._ensure_rest_session()
+            rest = self._rest_session
+            if rest:
+                resp = rest.get(url, params=params, timeout=60)
         if resp.status_code != 200:
             raise VCenterAPIError(
                 f"GET {path} failed: {resp.status_code}",
@@ -188,7 +217,7 @@ class VCenterClient:
                     data = self._get(path_alt)
                 except VCenterAPIError as e2:
                     logger.debug("vStats metrics %s failed: %s", path_alt, e2.status_code)
-                    raise e
+                    raise e2
             else:
                 raise
         out = self._list_response(data)
@@ -242,6 +271,12 @@ class VCenterClient:
             raise
 
     def close(self) -> None:
+        if self._rest_session is not None:
+            try:
+                self._rest_session.delete(f"{self.server}/api/session", timeout=5)
+            except Exception as e:
+                logger.debug("REST session delete failed: %s", e)
+            self._rest_session = None
         if self._session is None:
             return
         try:
