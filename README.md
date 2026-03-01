@@ -115,6 +115,34 @@ Use Prometheus as a data source and build dashboards from the `vcenter_*` metric
 - Datastore usage: `vcenter_datastore_free_bytes / vcenter_datastore_capacity_bytes`
 - VMs by power state: `count(vcenter_vm_info) by (power_state)`
 
+## Updating from previous versions
+
+To upgrade to the latest release:
+
+1. **Pull the latest code** (if you cloned the repo):
+   ```bash
+   git pull origin main
+   ```
+
+2. **Refresh dependencies**:
+   ```bash
+   pip install -r requirements.txt --upgrade
+   ```
+   If you installed the package in editable mode:
+   ```bash
+   pip install -e . --upgrade
+   ```
+
+3. **Restart the exporter** so it runs the new code:
+   ```bash
+   # If running under systemd, for example:
+   sudo systemctl restart vcenter-exporter
+   # Or stop the current process (Ctrl+C) and start again:
+   python -m vcenter_exporter.main
+   ```
+
+4. **Check the changelog** (if present) for any config or metric changes that might affect your Prometheus scrapes or Grafana dashboards. No config changes are required for the current release.
+
 ## License
 
 MIT

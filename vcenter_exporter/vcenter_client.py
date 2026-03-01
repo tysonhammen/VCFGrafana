@@ -94,25 +94,33 @@ class VCenterClient:
             )
         return resp.json()
 
+    def _list_response(self, data: Any) -> list:
+        """Normalize list API response: either {value: [...]} or [...]."""
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict) and "value" in data:
+            return data["value"]
+        return []
+
     def list_clusters(self) -> list[dict]:
         """List all clusters. GET /api/vcenter/cluster."""
         data = self._get("/api/vcenter/cluster")
-        return data.get("value", [])
+        return self._list_response(data)
 
     def list_hosts(self) -> list[dict]:
         """List all hosts. GET /api/vcenter/host."""
         data = self._get("/api/vcenter/host")
-        return data.get("value", [])
+        return self._list_response(data)
 
     def list_datastores(self) -> list[dict]:
         """List all datastores. GET /api/vcenter/datastore."""
         data = self._get("/api/vcenter/datastore")
-        return data.get("value", [])
+        return self._list_response(data)
 
     def list_vms(self) -> list[dict]:
         """List all VMs. GET /api/vcenter/vm (up to 1000 per request; use filter for more)."""
         data = self._get("/api/vcenter/vm")
-        return data.get("value", [])
+        return self._list_response(data)
 
     def close(self) -> None:
         """Release session (optional; DELETE /api/session)."""
