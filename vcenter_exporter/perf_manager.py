@@ -147,6 +147,7 @@ def query_performance(
         content = si.RetrieveContent()
         perf_manager = content.perfManager
         if not perf_manager:
+            logger.info("PerformanceManager: vCenter has no perfManager (performance not available)")
             return []
         counter_map = _build_counter_map(perf_manager)
         id_to_name: dict[int, str] = {v: k for k, v in counter_map.items()}
@@ -168,7 +169,8 @@ def query_performance(
                 entities_specs.append(("VM", vid, mo))
             except Exception:
                 pass
-
+        if not entities_specs and (host_ids or vm_ids):
+            logger.info("PerformanceManager: could not build any host/VM managed object refs from IDs")
         for rtype, rid, entity in entities_specs:
             metric_ids = _metric_ids_for_entity(perf_manager, counter_map, entity)
             if not metric_ids:
