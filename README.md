@@ -198,31 +198,29 @@ Use Prometheus as a data source and build dashboards from the `vcenter_*` metric
 
 ## Updating from previous versions
 
-To upgrade to the latest release:
+The exporter **requires the VCF SDK (vmware-vcenter)**; there is no REST-only fallback. After pulling new code, run the upgrade script to clean old bytecode and ensure the SDK is installed:
 
 1. **Pull the latest code** (if you cloned the repo):
    ```bash
+   cd /path/to/VCFGrafana
    git pull origin main
    ```
 
-2. **Refresh dependencies**:
+2. **Run the upgrade** (cleans old implementations and installs/verifies vmware-vcenter):
    ```bash
-   pip install -r requirements.txt --upgrade
+   ./install.sh --upgrade
    ```
-   If you installed the package in editable mode (use `--user` if you don’t have root):
-   ```bash
-   pip install -e . --upgrade
-   ```
+   This removes `__pycache__` and `.pyc` files, installs/upgrades dependencies from `requirements.txt`, and verifies that the VCF SDK can be imported. If you use a virtual environment elsewhere, run the same steps there: clean bytecode, then `pip install -r requirements.txt` and confirm `vmware-vcenter` is installed.
 
-3. **Restart the exporter** so it runs the new code:
+3. **Restart the exporter**:
    ```bash
-   # If running under systemd, for example:
+   # If running under systemd:
    sudo systemctl restart vcenter-exporter
    # Or stop the current process (Ctrl+C) and start again:
-   python -m vcenter_exporter.main
+   .venv/bin/python -m vcenter_exporter.main
    ```
 
-4. **Check the changelog** (if present) for any config or metric changes that might affect your Prometheus scrapes or Grafana dashboards. No config changes are required for the current release.
+4. **Check the changelog** (if present) for any config or metric changes.
 
 ## License
 

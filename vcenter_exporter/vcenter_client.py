@@ -1,9 +1,8 @@
 """
 vCenter client using the VCF SDK for Python (vmware-vcenter).
 
-Uses create_vsphere_client from vmware.vapi.vsphere.client to connect to vCenter
-and access inventory (Cluster, Host, Datastore, VM). Performance metrics (vStats/stats)
-are requested via the same session when the SDK does not expose them.
+Requires vmware-vcenter. Uses create_vsphere_client for inventory;
+performance metrics (vStats/stats) use the same session.
 
 See: https://github.com/vmware/vcf-sdk-python
 """
@@ -53,8 +52,8 @@ class VCenterClient:
     """
     Client for vCenter using the VCF SDK (vmware-vcenter).
 
-    Uses create_vsphere_client for inventory; uses the same HTTP session
-    for stats API calls when needed.
+    Requires vmware-vcenter. Uses create_vsphere_client for inventory;
+    uses the same HTTP session for stats API calls when needed.
     """
 
     def __init__(
@@ -65,6 +64,10 @@ class VCenterClient:
         verify_ssl: bool = True,
         session_timeout_seconds: int = 25 * 60,
     ):
+        if not HAS_VSPHERE_CLIENT:
+            raise VCenterAPIError(
+                "vmware-vcenter is not installed. Run the installer with upgrade: ./install.sh --upgrade"
+            )
         self.server = server.rstrip("/")
         self.user = user
         self.password = password
@@ -73,18 +76,16 @@ class VCenterClient:
 
         self._client: Any = None
         self._session: Optional[requests.Session] = None
-        if not HAS_VSPHERE_CLIENT:
-            raise VCenterAPIError(
-                "vmware-vcenter is not installed. Install it with: pip install vmware-vcenter"
-            )
         self._connect()
 
     def _connect(self) -> None:
         """Create vSphere client and session."""
+        import urllib3
+        if not self.verify_ssl:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         session = requests.Session()
         session.verify = self.verify_ssl
         session.headers["Content-Type"] = "application/json"
-        # create_vsphere_client uses server as hostname (no scheme)
         host = self.server
         if host.startswith("https://"):
             host = host[8:]
@@ -116,7 +117,6 @@ class VCenterClient:
         return resp.json()
 
     def _list_response(self, data: Any) -> list:
-        """Normalize list API response: either {value: [...]} or [...]."""
         if isinstance(data, list):
             return data
         if isinstance(data, dict) and "value" in data:
@@ -124,7 +124,6 @@ class VCenterClient:
         return []
 
     def list_clusters(self) -> list[dict]:
-        """List all clusters via vcenter.Cluster.list()."""
         clusters = self._client.vcenter.Cluster.list()
         out = []
         for c in clusters:
@@ -134,7 +133,6 @@ class VCenterClient:
         return out
 
     def list_hosts(self) -> list[dict]:
-        """List all hosts via vcenter.Host.list()."""
         hosts = self._client.vcenter.Host.list()
         out = []
         for h in hosts:
@@ -146,7 +144,6 @@ class VCenterClient:
         return out
 
     def list_datastores(self) -> list[dict]:
-        """List all datastores via vcenter.Datastore.list()."""
         datastores = self._client.vcenter.Datastore.list()
         out = []
         for d in datastores:
@@ -159,7 +156,6 @@ class VCenterClient:
         return out
 
     def list_vms(self) -> list[dict]:
-        """List all VMs via vcenter.VM.list()."""
         vms = self._client.vcenter.VM.list()
         out = []
         for v in vms:
@@ -180,7 +176,6 @@ class VCenterClient:
         return out
 
     def get_vstats_metrics(self) -> list[str]:
-        """List available vStats/stats metric names via REST (SDK may not expose this)."""
         path = "/api/vstats/stats/metrics"
         try:
             logger.debug("vStats metrics: GET %s%s", self.server, path)
@@ -211,7 +206,6 @@ class VCenterClient:
         metrics: Optional[list[str]] = None,
         rsrcs: Optional[list[str]] = None,
     ) -> Any:
-        """Get vStats/stats data points via REST (SDK may not expose this)."""
         params: dict[str, Any] = {"start": start_sec, "end": end_sec}
         if types:
             params["types"] = types
@@ -227,7 +221,7 @@ class VCenterClient:
             if e.status_code in (404, 501, 400):
                 path_alt = "/api/stats/data/dp"
                 metrics_list = list(dict.fromkeys(metrics)) if metrics else []
-                if len(metrics_list) <= 1:
+                if not metrics_list:
                     logger.debug("vStats data: trying GET %s%s", self.server, path_alt)
                     return self._get(path_alt, params=params)
                 logger.debug("vStats data: trying GET %s%s (one metric per request)", self.server, path_alt)
@@ -248,7 +242,6 @@ class VCenterClient:
             raise
 
     def close(self) -> None:
-        """Release session (optional)."""
         if self._session is None:
             return
         try:

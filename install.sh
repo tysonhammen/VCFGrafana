@@ -91,8 +91,36 @@ ensure_venv() {
   fi
   echo "Installing/upgrading package in .venv ..."
   "$REPO_ROOT/.venv/bin/python" -m pip install -q --upgrade pip
+  "$REPO_ROOT/.venv/bin/python" -m pip install -q -r "$REPO_ROOT/requirements.txt"
   "$REPO_ROOT/.venv/bin/python" -m pip install -q -e "$REPO_ROOT"
-  echo "Python environment ready."
+  if ! "$REPO_ROOT/.venv/bin/python" -c "from vmware.vapi.vsphere.client import create_vsphere_client" 2>/dev/null; then
+    echo "ERROR: VCF SDK (vmware-vcenter) could not be imported. Install with: $REPO_ROOT/.venv/bin/pip install -r requirements.txt"
+    return 1
+  fi
+  echo "Python environment ready (VCF SDK available)."
+}
+
+# Clean old bytecode and ensure VCF SDK is installed. Use after git pull / upgrade.
+upgrade_venv() {
+  echo "Upgrading vCenter exporter: cleaning old implementations and ensuring VCF SDK ..."
+  # Remove stale bytecode from any previous implementation (exclude .venv)
+  while IFS= read -r -d '' d; do
+    rm -rf "$d"
+  done < <(find "$REPO_ROOT" -type d -name "__pycache__" ! -path "$REPO_ROOT/.venv/*" -print0 2>/dev/null)
+  find "$REPO_ROOT" -type f -name "*.pyc" ! -path "$REPO_ROOT/.venv/*" -delete 2>/dev/null || true
+  if [[ ! -d "$REPO_ROOT/.venv" ]]; then
+    echo "No .venv found. Running full install."
+    ensure_venv
+    return $?
+  fi
+  "$REPO_ROOT/.venv/bin/python" -m pip install -q --upgrade pip
+  "$REPO_ROOT/.venv/bin/python" -m pip install -q --upgrade -r "$REPO_ROOT/requirements.txt"
+  "$REPO_ROOT/.venv/bin/python" -m pip install -q -e "$REPO_ROOT"
+  if ! "$REPO_ROOT/.venv/bin/python" -c "from vmware.vapi.vsphere.client import create_vsphere_client" 2>/dev/null; then
+    echo "ERROR: VCF SDK (vmware-vcenter) is not available after upgrade. Run: $REPO_ROOT/.venv/bin/pip install -r $REPO_ROOT/requirements.txt"
+    return 1
+  fi
+  echo "Upgrade complete. VCF SDK is available."
 }
 
 install_systemd() {
@@ -108,6 +136,10 @@ install_systemd() {
   fi
   if [[ ! -x "$REPO_ROOT/.venv/bin/python" ]]; then
     echo "Missing $REPO_ROOT/.venv/bin/python. Run ./install.sh first."
+    return 1
+  fi
+  if ! "$REPO_ROOT/.venv/bin/python" -c "from vmware.vapi.vsphere.client import create_vsphere_client" 2>/dev/null; then
+    echo "VCF SDK (vmware-vcenter) not found in .venv. Run: ./install.sh --upgrade"
     return 1
   fi
 
@@ -145,6 +177,13 @@ EOF
 # --- main ---
 if [[ "${1:-}" == "--install-systemd" ]]; then
   install_systemd
+  exit 0
+fi
+
+if [[ "${1:-}" == "--upgrade" ]]; then
+  upgrade_venv || exit 1
+  echo ""
+  echo "To restart the exporter if running as a service: sudo systemctl restart vcenter-exporter"
   exit 0
 fi
 
