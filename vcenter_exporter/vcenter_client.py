@@ -260,13 +260,32 @@ class VCenterClient:
                     try:
                         out = self._get(path_alt, params=single_params)
                     except VCenterAPIError as e2:
-                        logger.debug("vStats data metric=%s failed: %s", one_metric, e2.status_code)
+                        logger.debug(
+                            "vStats data metric=%s failed: %s %s",
+                            one_metric,
+                            e2.status_code,
+                            (e2.response_text or "")[:200],
+                        )
                         continue
                     part = out if isinstance(out, list) else (out.get("value") or out.get("data") or [])
                     if isinstance(part, list):
                         merged.extend(part)
                     else:
                         merged.append(part)
+                if not merged:
+                    # Fallback: request without metric filter; filter client-side
+                    logger.debug("vStats data: all metric-specific requests failed, trying without metric filter")
+                    try:
+                        no_metric_params = {"start": params["start"], "end": params["end"]}
+                        if params.get("types"):
+                            no_metric_params["types"] = params["types"]
+                        out = self._get(path_alt, params=no_metric_params)
+                    except VCenterAPIError as e3:
+                        logger.debug("vStats data (no metric filter) failed: %s %s", e3.status_code, (e3.response_text or "")[:200])
+                        return merged
+                    part = out if isinstance(out, list) else (out.get("value") or out.get("data") or [])
+                    if isinstance(part, list):
+                        merged = part
                 return merged
             raise
 
