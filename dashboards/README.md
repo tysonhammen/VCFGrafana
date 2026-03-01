@@ -30,6 +30,7 @@ Repeat for each dashboard you want, or use provisioning (below).
 Each dashboard defines:
 
 - **Data source** – Prometheus (set at import; change in dashboard settings if needed).
+- **App** – From `label_values(..., app)`. Use this when your Prometheus scrape config adds an `app` label (e.g. `app: "vCenter"`); choose one or “All”.
 - **vCenter** – Dropdown from `label_values(vcenter_*_total, vcenter)`. Choose one or “All”.
 - **Cluster** (Hosts, VMs) – Filter by cluster.
 - **Datastore** (Storage) – Filter by datastore name.

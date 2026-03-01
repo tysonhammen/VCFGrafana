@@ -15,7 +15,7 @@
       "pluginVersion": "9.0.0",
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "expr": "vcenter_cluster_info{vcenter=~\"$vcenter\"}",
+        "expr": "vcenter_cluster_info{app=~\"$app\", vcenter=~\"$vcenter\"}",
         "format": "table",
         "instant": true,
         "refId": "A"
@@ -58,6 +58,20 @@
         "options": [],
         "allValue": ".*",
         "query": "label_values(vcenter_cluster_info, vcenter)",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": ".*" },
+        "hide": 0,
+        "includeAll": true,
+        "label": "App",
+        "multi": true,
+        "name": "app",
+        "options": [],
+        "allValue": ".*",
+        "query": "label_values(vcenter_cluster_info, app)",
         "refresh": 2,
         "skipUrlSync": false,
         "type": "query"

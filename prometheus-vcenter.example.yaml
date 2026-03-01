@@ -1,0 +1,14 @@
+# Example Prometheus scrape config for the vCenter exporter.
+# Add this to your prometheus.yml scrape_configs, or include it via your config management.
+#
+# The 'app' label is applied to all metrics from this target so you can
+# filter in Grafana when you have multiple exporters or jobs.
+#
+scrape_configs:
+  - job_name: 'vcenter'
+    static_configs:
+      - targets: ['srv-vcexp-01.lab.influencedigital.com:9680']
+        labels:
+          app: "vCenter"
+    metrics_path: /metrics
+    scrape_interval: 5m

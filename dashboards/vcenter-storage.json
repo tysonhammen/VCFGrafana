@@ -21,7 +21,7 @@
       "pluginVersion": "9.0.0",
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "expr": "vcenter_datastore_free_bytes{vcenter=~\"$vcenter\", name=~\"$datastore\"} / vcenter_datastore_capacity_bytes{vcenter=~\"$vcenter\", name=~\"$datastore\"} * 100",
+        "expr": "vcenter_datastore_free_bytes{app=~\"$app\", vcenter=~\"$vcenter\", name=~\"$datastore\"} / vcenter_datastore_capacity_bytes{app=~\"$app\", vcenter=~\"$vcenter\", name=~\"$datastore\"} * 100",
         "format": "table",
         "instant": true,
         "legendFormat": "{{ name }}",
@@ -46,7 +46,7 @@
       "pluginVersion": "9.0.0",
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "expr": "vcenter_datastore_capacity_bytes{vcenter=~\"$vcenter\", name=~\"$datastore\"}",
+        "expr": "vcenter_datastore_capacity_bytes{app=~\"$app\", vcenter=~\"$vcenter\", name=~\"$datastore\"}",
         "format": "table",
         "instant": true,
         "refId": "A"
@@ -70,7 +70,7 @@
       "pluginVersion": "9.0.0",
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "expr": "vcenter_datastore_free_bytes{vcenter=~\"$vcenter\", name=~\"$datastore\"}",
+        "expr": "vcenter_datastore_free_bytes{app=~\"$app\", vcenter=~\"$vcenter\", name=~\"$datastore\"}",
         "format": "table",
         "instant": true,
         "refId": "A"
@@ -113,6 +113,20 @@
         "options": [],
         "allValue": ".*",
         "query": "label_values(vcenter_datastore_info, vcenter)",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": ".*" },
+        "hide": 0,
+        "includeAll": true,
+        "label": "App",
+        "multi": true,
+        "name": "app",
+        "options": [],
+        "allValue": ".*",
+        "query": "label_values(vcenter_datastore_info, app)",
         "refresh": 2,
         "skipUrlSync": false,
         "type": "query"

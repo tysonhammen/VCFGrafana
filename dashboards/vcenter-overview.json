@@ -17,7 +17,7 @@
       "id": 1,
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
       "pluginVersion": "9.0.0",
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "sum(vcenter_cluster_total{vcenter=~\"$vcenter\"})", "legendFormat": "", "refId": "A" }],
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "sum(vcenter_cluster_total{app=~\"$app\", vcenter=~\"$vcenter\"})", "legendFormat": "", "refId": "A" }],
       "title": "Clusters",
       "type": "stat"
     },
@@ -31,7 +31,7 @@
       "id": 2,
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
       "pluginVersion": "9.0.0",
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "sum(vcenter_host_total{vcenter=~\"$vcenter\"})", "legendFormat": "", "refId": "A" }],
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "sum(vcenter_host_total{app=~\"$app\", vcenter=~\"$vcenter\"})", "legendFormat": "", "refId": "A" }],
       "title": "Hosts",
       "type": "stat"
     },
@@ -45,7 +45,7 @@
       "id": 3,
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
       "pluginVersion": "9.0.0",
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "sum(vcenter_vm_total{vcenter=~\"$vcenter\"})", "legendFormat": "", "refId": "A" }],
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "sum(vcenter_vm_total{app=~\"$app\", vcenter=~\"$vcenter\"})", "legendFormat": "", "refId": "A" }],
       "title": "VMs",
       "type": "stat"
     },
@@ -59,7 +59,7 @@
       "id": 4,
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
       "pluginVersion": "9.0.0",
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "sum(vcenter_datastore_total{vcenter=~\"$vcenter\"})", "legendFormat": "", "refId": "A" }],
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "sum(vcenter_datastore_total{app=~\"$app\", vcenter=~\"$vcenter\"})", "legendFormat": "", "refId": "A" }],
       "title": "Datastores",
       "type": "stat"
     },
@@ -78,7 +78,7 @@
       "id": 5,
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
       "pluginVersion": "9.0.0",
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "max(vcenter_scrape_error{vcenter=~\"$vcenter\"})", "legendFormat": "", "refId": "A" }],
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "max(vcenter_scrape_error{app=~\"$app\", vcenter=~\"$vcenter\"})", "legendFormat": "", "refId": "A" }],
       "title": "Exporter health",
       "type": "stat"
     },
@@ -90,7 +90,7 @@
       "pluginVersion": "9.0.0",
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "expr": "vcenter_cluster_info{vcenter=~\"$vcenter\"}",
+        "expr": "vcenter_cluster_info{app=~\"$app\", vcenter=~\"$vcenter\"}",
         "format": "table",
         "instant": true,
         "refId": "A"
@@ -107,7 +107,7 @@
       "pluginVersion": "9.0.0",
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "expr": "count by (connection_state) (vcenter_host_info{vcenter=~\"$vcenter\"})",
+        "expr": "count by (connection_state) (vcenter_host_info{app=~\"$app\", vcenter=~\"$vcenter\"})",
         "format": "table",
         "instant": true,
         "refId": "A"
@@ -124,7 +124,7 @@
       "pluginVersion": "9.0.0",
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "expr": "count by (power_state) (vcenter_vm_info{vcenter=~\"$vcenter\"})",
+        "expr": "count by (power_state) (vcenter_vm_info{app=~\"$app\", vcenter=~\"$vcenter\"})",
         "format": "table",
         "instant": true,
         "refId": "A"
@@ -141,7 +141,7 @@
       "pluginVersion": "9.0.0",
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "expr": "sum(vcenter_datastore_free_bytes{vcenter=~\"$vcenter\"}) / sum(vcenter_datastore_capacity_bytes{vcenter=~\"$vcenter\"}) * 100",
+        "expr": "sum(vcenter_datastore_free_bytes{app=~\"$app\", vcenter=~\"$vcenter\"}) / sum(vcenter_datastore_capacity_bytes{app=~\"$app\", vcenter=~\"$vcenter\"}) * 100",
         "format": "table",
         "instant": true,
         "refId": "A"
@@ -184,6 +184,22 @@
         "options": [],
         "allValue": ".*",
         "query": "label_values(vcenter_cluster_total, vcenter)",
+        "queryValue": "",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": ".*" },
+        "hide": 0,
+        "includeAll": true,
+        "label": "App",
+        "multi": true,
+        "name": "app",
+        "options": [],
+        "allValue": ".*",
+        "query": "label_values(vcenter_cluster_total, app)",
         "queryValue": "",
         "refresh": 2,
         "regex": "",

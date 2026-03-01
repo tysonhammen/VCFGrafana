@@ -22,7 +22,7 @@
       "pluginVersion": "9.0.0",
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "expr": "vcenter_host_info{vcenter=~\"$vcenter\", cluster=~\"$cluster\"}",
+        "expr": "vcenter_host_info{app=~\"$app\", vcenter=~\"$vcenter\", cluster=~\"$cluster\"}",
         "format": "table",
         "instant": true,
         "refId": "A"
@@ -65,6 +65,20 @@
         "options": [],
         "allValue": ".*",
         "query": "label_values(vcenter_host_info, vcenter)",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": ".*" },
+        "hide": 0,
+        "includeAll": true,
+        "label": "App",
+        "multi": true,
+        "name": "app",
+        "options": [],
+        "allValue": ".*",
+        "query": "label_values(vcenter_host_info, app)",
         "refresh": 2,
         "skipUrlSync": false,
         "type": "query"

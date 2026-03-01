@@ -119,16 +119,20 @@ http://<host>:9680/metrics
 
 ### 4. Configure Prometheus
 
-Add a scrape config to `prometheus.yml`:
+Add a scrape config to `prometheus.yml` (see also `prometheus-vcenter.example.yaml`):
 
 ```yaml
 scrape_configs:
   - job_name: 'vcenter'
     static_configs:
-      - targets: ['<exporter_host>:9680']
+      - targets: ['srv-vcexp-01.lab.influencedigital.com:9680']
+        labels:
+          app: "vCenter"
     metrics_path: /metrics
     scrape_interval: 5m
 ```
+
+Replace the target host/port if needed. The `app` label is used by the Grafana dashboards to filter metrics.
 
 Reload or restart Prometheus so it scrapes the new target.
 
