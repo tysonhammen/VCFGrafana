@@ -13,15 +13,71 @@ A **Python** monitoring service that uses the [vSphere Automation API](https://d
 - vCenter 6.5+ with vSphere Automation API (REST) enabled
 - Network access from the exporter to vCenter (HTTPS, typically 443)
 
+## Install with script (Linux)
+
+On Linux you can use the install script to gather configuration interactively, create a virtual environment, and optionally install and enable a systemd service.
+
+1. **Clone or unpack** the repo and go to its directory:
+   ```bash
+   cd /path/to/VCFGrafana
+   ```
+
+2. **Run the installer** (as the user that will own the process, not root):
+   ```bash
+   chmod +x install.sh
+   ./install.sh
+   ```
+   You will be prompted for:
+   - **vCenter URL** (e.g. `https://vcenter.example.com`) – required
+   - **vCenter user** (default: `administrator@vsphere.local`)
+   - **vCenter password** – required (input is hidden)
+   - **Verify vCenter SSL certificate?** – Y/n (default Y)
+   - **Exporter listen address** (default: `0.0.0.0`)
+   - **Exporter port** (default: `9680`)
+
+   The script creates `.env`, a `.venv` virtual environment, and installs the package.
+
+3. **Install and enable the systemd service** (so the exporter runs on boot and restarts on failure):
+   ```bash
+   sudo ./install.sh --install-systemd
+   ```
+   This creates `/etc/systemd/system/vcenter-exporter.service`, enables it, and starts it. The service runs as the user that owns the repo directory.
+
+   **Useful commands:**
+   - `sudo systemctl status vcenter-exporter` – status
+   - `journalctl -u vcenter-exporter -f` – follow logs
+   - `sudo systemctl restart vcenter-exporter` – restart after config/code changes
+   - `sudo systemctl stop vcenter-exporter` – stop
+
+   To **re-run the installer** (e.g. to change config), run `./install.sh` again. If `.env` already exists, you will be asked whether to overwrite it.
+
 ## Quick start
 
 ### 1. Install dependencies
 
+**Option A – no root (recommended)**  
+Use a virtual environment or install into your user directory:
+
+```bash
+# Using a virtual environment (recommended)
+python3 -m venv .venv
+source .venv/bin/activate   # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+# or: pip install -e .
+
+# Or install into your user directory (no venv)
+pip install --user -r requirements.txt
+# or: pip install --user -e .
+```
+
+**Option B – system install (requires root)**
+
 ```bash
 pip install -r requirements.txt
-# or install the package
-pip install -e .
+# or: sudo pip install -e .
 ```
+
+If you see **Permission denied** writing to `/usr/local/...`, use Option A (venv or `pip install --user`).
 
 ### 2. Configure
 
@@ -128,7 +184,7 @@ To upgrade to the latest release:
    ```bash
    pip install -r requirements.txt --upgrade
    ```
-   If you installed the package in editable mode:
+   If you installed the package in editable mode (use `--user` if you don’t have root):
    ```bash
    pip install -e . --upgrade
    ```
