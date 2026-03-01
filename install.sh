@@ -97,7 +97,11 @@ ensure_venv() {
     echo "ERROR: VCF SDK (vmware-vcenter) could not be imported. Install with: $REPO_ROOT/.venv/bin/pip install -r requirements.txt"
     return 1
   fi
-  echo "Python environment ready (VCF SDK available)."
+  if "$REPO_ROOT/.venv/bin/python" -c "import pyVmomi" 2>/dev/null; then
+    echo "Python environment ready (VCF SDK + pyvmomi for performance fallback)."
+  else
+    echo "Python environment ready (VCF SDK available). Install pyvmomi for host/VM performance fallback: pip install pyvmomi"
+  fi
 }
 
 # Clean old bytecode and ensure VCF SDK is installed. Use after git pull / upgrade.
@@ -120,7 +124,11 @@ upgrade_venv() {
     echo "ERROR: VCF SDK (vmware-vcenter) is not available after upgrade. Run: $REPO_ROOT/.venv/bin/pip install -r $REPO_ROOT/requirements.txt"
     return 1
   fi
-  echo "Upgrade complete. VCF SDK is available."
+  if "$REPO_ROOT/.venv/bin/python" -c "import pyVmomi" 2>/dev/null; then
+    echo "Upgrade complete. VCF SDK and pyvmomi (performance fallback) are available."
+  else
+    echo "Upgrade complete. VCF SDK is available. Install pyvmomi for host/VM performance fallback: $REPO_ROOT/.venv/bin/pip install pyvmomi"
+  fi
 }
 
 install_systemd() {
