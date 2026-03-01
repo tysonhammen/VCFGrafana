@@ -96,14 +96,20 @@ VCENTER_PASSWORD=your_password
 VCENTER_VERIFY_SSL=true
 EXPORTER_HOST=0.0.0.0
 EXPORTER_PORT=9680
+# Optional: log to file and set level (DEBUG for performance/vStats troubleshooting)
+# LOG_FILE=/var/log/vcenter-exporter.log
+# LOG_LEVEL=DEBUG
 ```
 
 - **VCENTER_SERVER** – vCenter URL (with `https://`).
 - **VCENTER_USER** / **VCENTER_PASSWORD** – Credentials that can read inventory (clusters, hosts, datastores, VMs).
 - **VCENTER_VERIFY_SSL** – Set to `false` only if you use a self-signed certificate and accept the security risk.
 - **EXPORTER_HOST** / **EXPORTER_PORT** – Bind address and port for the metrics HTTP server (default `0.0.0.0:9680`).
-- **LOG_FILE** – Optional. If set, all logs are also written to this file (e.g. `/var/log/vcenter-exporter.log`).
-- **LOG_LEVEL** – Optional. Set to `DEBUG` to troubleshoot performance/vStats (e.g. why `vcenter_perf_value` is missing). Default `INFO`.
+
+**Log file and debug logging**
+
+- **LOG_FILE** – Optional. If set, all logs are also written to this file (e.g. `/var/log/vcenter-exporter.log`). Useful when running as a service so you can inspect logs without `journalctl`.
+- **LOG_LEVEL** – Optional. Set to `DEBUG` to troubleshoot performance/vStats (e.g. why `vcenter_perf_value` is missing). Default `INFO`. Use with `LOG_FILE` to capture debug output to a file.
 
 ### 3. Run the exporter
 
