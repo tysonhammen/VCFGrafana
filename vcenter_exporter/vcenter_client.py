@@ -279,6 +279,8 @@ class VCenterClient:
                         no_metric_params = {"start": params["start"], "end": params["end"]}
                         if params.get("types"):
                             no_metric_params["types"] = params["types"]
+                        if params.get("rsrcs"):
+                            no_metric_params["rsrcs"] = params["rsrcs"]
                         out = self._get(path_alt, params=no_metric_params)
                     except VCenterAPIError as e3:
                         logger.debug("vStats data (no metric filter) failed: %s %s", e3.status_code, (e3.response_text or "")[:200])

@@ -264,12 +264,14 @@ class VCenterCollector:
             logger.debug("vStats: preferred metrics not in available list, using first 10: %s", metrics_to_use)
         else:
             logger.debug("vStats: using metrics %s", metrics_to_use)
+        rsrcs = [f"type.HOST={hid}" for hid in host_id_to_name] + [f"type.VM={vid}" for vid in vm_id_to_name]
         try:
             data = self.client.get_vstats_data(
                 types=["HOST", "VM"],
                 start_sec=start_sec,
                 end_sec=end_sec,
                 metrics=metrics_to_use,
+                rsrcs=rsrcs,
             )
         except VCenterAPIError as e:
             _log_perf_failure("data", e)

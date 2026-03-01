@@ -1,6 +1,6 @@
 # vCenter Prometheus Exporter
 
-A **Python** monitoring service that uses the [vSphere Automation API](https://developer.broadcom.com/xapis/vsphere-automation-api/latest/) to expose **vCenter** inventory and basic metrics to **Prometheus**. It monitors:
+A **Python** monitoring service that uses the **[VCF SDK for Python](https://github.com/vmware/vcf-sdk-python)** (vmware-vcenter) to expose **vCenter** inventory and basic metrics to **Prometheus**. It monitors:
 
 - **Clusters**
 - **Hosts** (ESXi)
@@ -10,9 +10,8 @@ A **Python** monitoring service that uses the [vSphere Automation API](https://d
 ## Requirements
 
 - Python 3.10+
-- vCenter 6.5+ with vSphere Automation API (REST) enabled
-- Network access from the exporter to vCenter (HTTPS, typically 443)
-- **[vmware-vcenter](https://github.com/vmware/vcf-sdk-python)** (VCF SDK for Python) for vCenter inventory and authentication
+- vCenter 6.5+ with network access from the exporter (HTTPS, typically 443)
+- **[vmware-vcenter](https://github.com/vmware/vcf-sdk-python)** (VCF SDK for Python) for vCenter inventory, authentication, and optional performance metrics via the stats API
 
 ## Install with script (Linux)
 
@@ -99,7 +98,7 @@ VCENTER_PASSWORD=your_password
 VCENTER_VERIFY_SSL=true
 EXPORTER_HOST=0.0.0.0
 EXPORTER_PORT=9680
-# Optional: log to file and set level (DEBUG for performance/vStats troubleshooting)
+# Optional: log to file and set level (DEBUG for performance/stats API troubleshooting)
 # LOG_FILE=/var/log/vcenter-exporter.log
 # LOG_LEVEL=DEBUG
 ```
@@ -112,7 +111,7 @@ EXPORTER_PORT=9680
 **Log file and debug logging**
 
 - **LOG_FILE** – Optional. If set, all logs are also written to this file (e.g. `/var/log/vcenter-exporter.log`). Useful when running as a service so you can inspect logs without `journalctl`.
-- **LOG_LEVEL** – Optional. Set to `DEBUG` to troubleshoot performance/vStats (e.g. why `vcenter_perf_value` is missing). Default `INFO`. Use with `LOG_FILE` to capture debug output to a file.
+- **LOG_LEVEL** – Optional. Set to `DEBUG` to troubleshoot performance/stats (e.g. why `vcenter_perf_value` is missing). Default `INFO`. Use with `LOG_FILE` to capture debug output to a file.
 
 If the service runs as a non-root user (e.g. `idadm`) and you use `LOG_FILE=/var/log/vcenter-exporter.log`, create the file and give the service user write permission before starting:
 
@@ -172,7 +171,7 @@ Reload or restart Prometheus so it scrapes the new target.
 | `vcenter_vm_cpu_count` | Gauge | Configured vCPU count per VM |
 | `vcenter_vm_memory_mib` | Gauge | Configured memory (MiB) per VM |
 | `vcenter_vm_total` | Gauge | Total number of VMs |
-| `vcenter_perf_value` | Gauge | Host/VM performance (vStats; labels: `vcenter`, `resource_type`, `resource_id`, `resource_name`, `metric`). Only present when vStats API is available. |
+| `vcenter_perf_value` | Gauge | Host/VM performance (stats API; labels: `vcenter`, `resource_type`, `resource_id`, `resource_name`, `metric`). Only present when the vCenter stats API is available. |
 | `vcenter_scrape_error` | Gauge | 1 if last scrape failed, 0 on success (for alerting) |
 
 ## API reference
@@ -181,9 +180,9 @@ The exporter uses the **[VCF SDK for Python](https://github.com/vmware/vcf-sdk-p
 
 - **Connection:** `create_vsphere_client(server, username, password, session)` from `vmware.vapi.vsphere.client`
 - **Inventory:** `vcenter.Cluster.list()`, `vcenter.Host.list()`, `vcenter.Datastore.list()`, `vcenter.VM.list()`
-- **Performance (optional):** When vStats/REST stats APIs are available, the exporter uses the same session to call `/api/stats/metrics` and `/api/stats/data/dp` (or `/api/vstats/...`) for CPU/memory metrics.
+- **Performance (optional):** When the vCenter stats API is available, the exporter uses a REST session to call `/api/stats/metrics` and `/api/stats/data/dp` for CPU/memory metrics (with explicit host/VM resources).
 
-See [vSphere Automation API](https://developer.broadcom.com/xapis/vsphere-automation-api/latest/) and [VCF SDK Python](https://github.com/vmware/vcf-sdk-python) for documentation.
+See [VCF SDK for Python](https://github.com/vmware/vcf-sdk-python) for documentation.
 
 ## Grafana
 
