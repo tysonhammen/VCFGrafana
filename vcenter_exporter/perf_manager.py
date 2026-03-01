@@ -157,23 +157,62 @@ def query_performance(
 
         results: list[tuple[str, str, str, float]] = []
         entities_specs: list[tuple[str, str, Any]] = []
+        first_mor_error: Optional[str] = None
+
+        def _make_mor(mo_type: str, mo_id: str) -> Any:
+            """Build ManagedObjectReference; try constructor then attr-based."""
+            try:
+                return vim.ManagedObjectReference(mo_type, mo_id)
+            except Exception as e1:
+                pass
+            try:
+                return vim.ManagedObjectReference(type=mo_type, value=mo_id)
+            except Exception as e2:
+                pass
+            try:
+                mo = vim.ManagedObjectReference()
+                setattr(mo, "type", mo_type)
+                mo.value = mo_id
+                return mo
+            except Exception as e3:
+                pass
+            try:
+                mo = vim.ManagedObjectReference()
+                mo._type = mo_type
+                mo.value = mo_id
+                return mo
+            except Exception as e4:
+                raise type(e1)(f"{mo_type} {mo_id}: {e1!s}; {e4!s}") from e4
+
         for hid in host_ids:
             try:
-                mo = vim.ManagedObjectReference("HostSystem", hid)
+                mo = _make_mor("HostSystem", hid)
                 entities_specs.append(("HOST", hid, mo))
-            except Exception:
-                pass
+            except Exception as e:
+                if first_mor_error is None:
+                    first_mor_error = f"HOST {hid}: {e}"
+                logger.debug("PerformanceManager: could not build MOR for HOST %s: %s", hid, e)
         for vid in vm_ids:
             try:
-                mo = vim.ManagedObjectReference("VirtualMachine", vid)
+                mo = _make_mor("VirtualMachine", vid)
                 entities_specs.append(("VM", vid, mo))
-            except Exception:
-                pass
+            except Exception as e:
+                if first_mor_error is None:
+                    first_mor_error = f"VM {vid}: {e}"
+                logger.debug("PerformanceManager: could not build MOR for VM %s: %s", vid, e)
         if not entities_specs and (host_ids or vm_ids):
-            logger.info("PerformanceManager: could not build any host/VM managed object refs from IDs")
+            logger.info(
+                "PerformanceManager: could not build any host/VM managed object refs from IDs%s",
+                f" ({first_mor_error})" if first_mor_error else "",
+            )
+        else:
+            n_host = sum(1 for t in entities_specs if t[0] == "HOST")
+            n_vm = sum(1 for t in entities_specs if t[0] == "VM")
+            logger.debug("PerformanceManager: built %d host, %d VM refs", n_host, n_vm)
         for rtype, rid, entity in entities_specs:
             metric_ids = _metric_ids_for_entity(perf_manager, counter_map, entity)
             if not metric_ids:
+                logger.debug("PerformanceManager: no metric IDs for %s %s (QueryAvailablePerfMetric empty or no match)", rtype, rid)
                 continue
             try:
                 # Real-time: maxSample=1 like vm_perf_example.py (no startTime/endTime)
@@ -187,6 +226,7 @@ def query_performance(
                 logger.info("PerformanceManager QueryPerf failed for %s %s: %s", rtype, rid, e)
                 continue
             if not query_result:
+                logger.debug("PerformanceManager: QueryPerf returned empty for %s %s", rtype, rid)
                 continue
             for base in query_result:
                 if not getattr(base, "value", None):
