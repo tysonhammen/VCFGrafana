@@ -1,0 +1,217 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "expr": "vcenter_perf_value{app=~\"$app\", vcenter=~\"$vcenter\", resource_type=\"VM\", resource_name=~\"$vm\", metric=~\"$metric\"}",
+        "legendFormat": "{{ resource_name }}",
+        "refId": "A"
+      }],
+      "title": "VM CPU / utilization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1 },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "expr": "vcenter_perf_value{app=~\"$app\", vcenter=~\"$vcenter\", resource_type=\"VM\", resource_name=~\"$vm\", metric=~\"mem_usage|mem_util\"}",
+        "legendFormat": "{{ resource_name }}",
+        "refId": "A"
+      }],
+      "title": "VM memory usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 }] },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 8 },
+      "id": 3,
+      "options": { "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "expr": "vcenter_perf_value{app=~\"$app\", vcenter=~\"$vcenter\", resource_type=\"VM\", resource_name=~\"$vm\", metric=~\"cpu_usage|cpu_util\"}",
+        "legendFormat": "{{ resource_name }}",
+        "refId": "A"
+      }],
+      "title": "VM CPU (current)",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 }] },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 8 },
+      "id": 4,
+      "options": { "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "expr": "vcenter_perf_value{app=~\"$app\", vcenter=~\"$vcenter\", resource_type=\"VM\", resource_name=~\"$vm\", metric=~\"mem_usage|mem_util\"}",
+        "legendFormat": "{{ resource_name }}",
+        "refId": "A"
+      }],
+      "title": "VM memory (current)",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 14 },
+      "id": 5,
+      "options": { "showHeader": true, "cellHeight": "sm" },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "expr": "vcenter_perf_value{app=~\"$app\", vcenter=~\"$vcenter\", resource_type=\"VM\"}",
+        "format": "table",
+        "instant": true,
+        "refId": "A"
+      }],
+      "title": "All VM performance (latest)",
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "resource_name": "VM", "metric": "Metric", "Value": "Value", "vcenter": "vCenter" } } }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["vcenter", "vms", "performance"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "Prometheus", "value": "Prometheus" },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Data source",
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "skipUrlSync": false,
+        "type": "datasource",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "label": "vCenter",
+        "multi": true,
+        "name": "vcenter",
+        "options": [],
+        "allValue": ".*",
+        "query": "label_values(vcenter_vm_info, vcenter)",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": ".*" },
+        "hide": 0,
+        "includeAll": true,
+        "label": "App",
+        "multi": true,
+        "name": "app",
+        "options": [],
+        "allValue": ".*",
+        "query": "label_values(vcenter_vm_info, app)",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "label": "VM",
+        "multi": true,
+        "name": "vm",
+        "options": [],
+        "allValue": ".*",
+        "query": "label_values(vcenter_perf_value{app=~\"$app\", vcenter=~\"$vcenter\", resource_type=\"VM\"}, resource_name)",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "query"
+      },
+      {
+        "current": { "selected": true, "text": "cpu_usage", "value": "cpu_usage" },
+        "hide": 0,
+        "includeAll": true,
+        "label": "Metric",
+        "multi": true,
+        "name": "metric",
+        "options": [],
+        "allValue": ".*",
+        "query": "label_values(vcenter_perf_value{app=~\"$app\", vcenter=~\"$vcenter\", resource_type=\"VM\"}, metric)",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "vCenter VM Performance",
+  "uid": "vcenter-vm-performance",
+  "version": 1,
+  "weekStart": ""
+}

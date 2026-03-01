@@ -122,6 +122,46 @@ class VCenterClient:
         data = self._get("/api/vcenter/vm")
         return self._list_response(data)
 
+    def get_vstats_metrics(self) -> list[str]:
+        """List available vStats metric names. GET /api/vstats/stats/metrics (Technology Preview)."""
+        try:
+            data = self._get("/api/vstats/stats/metrics")
+        except VCenterAPIError as e:
+            if e.status_code in (404, 501, 400):
+                try:
+                    data = self._get("/api/stats/metrics")
+                except VCenterAPIError:
+                    raise e
+            else:
+                raise
+        out = self._list_response(data)
+        if not out:
+            return []
+        return [m.get("metric", m) if isinstance(m, dict) else str(m) for m in out]
+
+    def get_vstats_data(
+        self,
+        types: list[str],
+        start_sec: int,
+        end_sec: int,
+        metrics: Optional[list[str]] = None,
+        rsrcs: Optional[list[str]] = None,
+    ) -> Any:
+        """Get vStats data points. GET /api/vstats/stats/data/dp (Technology Preview)."""
+        params: dict[str, Any] = {"start": start_sec, "end": end_sec}
+        if types:
+            params["types"] = types
+        if metrics:
+            params["metric"] = metrics
+        if rsrcs:
+            params["rsrcs"] = rsrcs
+        try:
+            return self._get("/api/vstats/stats/data/dp", params=params)
+        except VCenterAPIError as e:
+            if e.status_code in (404, 501, 400):
+                return self._get("/api/stats/data/dp", params=params)
+            raise
+
     def close(self) -> None:
         """Release session (optional; DELETE /api/session)."""
         if self._session is None:

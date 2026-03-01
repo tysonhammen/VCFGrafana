@@ -1,21 +1,27 @@
 """
-Prometheus collector that fetches vCenter inventory and exposes metrics.
+Prometheus collector that fetches vCenter inventory and performance metrics.
 
 Exposes:
 - vcenter_cluster_* (clusters)
 - vcenter_host_* (hosts)
 - vcenter_datastore_* (storage)
 - vcenter_vm_* (VMs)
+- vcenter_perf_* (host and VM performance from vStats when available)
 """
 
 import logging
-from typing import Optional
+import time
+from typing import Any, Optional
 
 from prometheus_client.core import GaugeMetricFamily, REGISTRY
 
 from .vcenter_client import VCenterClient, VCenterAPIError
 
 logger = logging.getLogger(__name__)
+
+# vStats metric names to collect (subset; API may return different names)
+VSTATS_METRICS_HOST = ["cpu.usage", "mem.usage", "cpu.util"]
+VSTATS_METRICS_VM = ["cpu.usage", "mem.usage", "cpu.util"]
 
 
 class VCenterCollector:
@@ -35,6 +41,7 @@ class VCenterCollector:
             yield from self._collect_hosts()
             yield from self._collect_datastores()
             yield from self._collect_vms()
+            yield from self._collect_performance()
             # Signal successful scrape
             err = GaugeMetricFamily(
                 "vcenter_scrape_error",
@@ -196,3 +203,100 @@ class VCenterCollector:
         yield vm_cpu
         yield vm_memory_mib
         yield vm_count
+
+    def _collect_performance(self):
+        """Collect host and VM performance from vStats API (Technology Preview)."""
+        end_sec = int(time.time())
+        start_sec = end_sec - 300  # last 5 minutes
+        host_id_to_name: dict[str, str] = {}
+        vm_id_to_name: dict[str, str] = {}
+        try:
+            for h in self.client.list_hosts():
+                hid = h.get("host") or ""
+                if hid:
+                    host_id_to_name[hid] = h.get("name") or hid
+            for v in self.client.list_vms():
+                vid = v.get("vm") or ""
+                if vid:
+                    vm_id_to_name[vid] = v.get("name") or vid
+        except Exception as e:
+            logger.debug("Could not build resource name maps: %s", e)
+
+        try:
+            available = self.client.get_vstats_metrics()
+        except VCenterAPIError as e:
+            logger.debug("vStats metrics not available (%s), skipping performance", e.status_code)
+            return
+        if not available:
+            return
+        metrics_to_use = [m for m in (VSTATS_METRICS_HOST + VSTATS_METRICS_VM) if m in available]
+        if not metrics_to_use:
+            metrics_to_use = available[:10]
+        try:
+            data = self.client.get_vstats_data(
+                types=["HOST", "VM"],
+                start_sec=start_sec,
+                end_sec=end_sec,
+                metrics=metrics_to_use,
+            )
+        except VCenterAPIError as e:
+            logger.debug("vStats data not available (%s), skipping performance", e.status_code)
+            return
+
+        points = self._parse_vstats_data(data)
+        if not points:
+            return
+
+        gauge = GaugeMetricFamily(
+            "vcenter_perf_value",
+            "vCenter performance metric (vStats; latest value in window)",
+            labels=["vcenter", "resource_type", "resource_id", "resource_name", "metric"],
+        )
+        for (rtype, rid, metric_name, value) in points:
+            name = host_id_to_name.get(rid) or vm_id_to_name.get(rid) or rid
+            safe_metric = metric_name.replace(".", "_").replace("-", "_")
+            gauge.add_metric(
+                [self.vcenter_instance, rtype, rid, name, safe_metric],
+                float(value),
+            )
+        yield gauge
+
+    def _parse_vstats_data(self, data: Any) -> list[tuple[str, str, str, float]]:
+        """Parse vStats API response into (resource_type, resource_id, metric, value)."""
+        out: list[tuple[str, str, str, float]] = []
+        items = data if isinstance(data, list) else data.get("value", data.get("data", []))
+        if not isinstance(items, list):
+            return out
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            rsrc = item.get("rsrc") or item.get("resource") or item.get("resource_id") or ""
+            if isinstance(rsrc, dict):
+                rsrc = rsrc.get("id") or rsrc.get("resource") or ""
+            metric = item.get("metric") or item.get("metric_name") or ""
+            value = None
+            if "value" in item and item["value"] is not None:
+                value = item["value"]
+            elif "data" in item and isinstance(item["data"], list) and item["data"]:
+                last = item["data"][-1]
+                value = last.get("value", last.get("v")) if isinstance(last, dict) else None
+            elif "values" in item and isinstance(item["values"], list) and item["values"]:
+                last = item["values"][-1]
+                value = last.get("value", last.get("v")) if isinstance(last, dict) else last
+            if value is None or metric == "":
+                continue
+            try:
+                vfloat = float(value)
+            except (TypeError, ValueError):
+                continue
+            if "type.HOST=" in str(rsrc):
+                rtype = "HOST"
+                rid = str(rsrc).split("=", 1)[-1].strip()
+            elif "type.VM=" in str(rsrc):
+                rtype = "VM"
+                rid = str(rsrc).split("=", 1)[-1].strip()
+            else:
+                rid = str(rsrc)
+                rtype = "UNKNOWN"
+            out.append((rtype, rid, metric, vfloat))
+        return out

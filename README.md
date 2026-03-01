@@ -152,6 +152,7 @@ Reload or restart Prometheus so it scrapes the new target.
 | `vcenter_vm_cpu_count` | Gauge | Configured vCPU count per VM |
 | `vcenter_vm_memory_mib` | Gauge | Configured memory (MiB) per VM |
 | `vcenter_vm_total` | Gauge | Total number of VMs |
+| `vcenter_perf_value` | Gauge | Host/VM performance (vStats; labels: `vcenter`, `resource_type`, `resource_id`, `resource_name`, `metric`). Only present when vStats API is available. |
 | `vcenter_scrape_error` | Gauge | 1 if last scrape failed, 0 on success (for alerting) |
 
 ## API reference
@@ -163,6 +164,7 @@ The exporter uses the vSphere Automation REST API:
 - **Hosts:** `GET /api/vcenter/host`
 - **Datastores:** `GET /api/vcenter/datastore`
 - **VMs:** `GET /api/vcenter/vm`
+- **Performance (vStats, Technology Preview):** `GET /api/vstats/stats/metrics`, `GET /api/vstats/stats/data/dp` — when available, the exporter collects CPU/memory metrics for hosts and VMs.
 
 See [vSphere Automation API](https://developer.broadcom.com/xapis/vsphere-automation-api/latest/) for full documentation.
 

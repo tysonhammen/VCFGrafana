@@ -4,7 +4,10 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    { "title": "Host Performance", "url": "/d/vcenter-host-performance", "type": "dashboard", "asDropdown": false },
+    { "title": "VM Performance", "url": "/d/vcenter-vm-performance", "type": "dashboard", "asDropdown": false }
+  ],
   "liveNow": false,
   "panels": [
     {
@@ -96,7 +99,7 @@
         "refId": "A"
       }],
       "title": "Clusters",
-      "transformations": [{ "id": "merge", "options": {} }, { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "Count", "name": "Cluster" } }],
+      "transformations": [{ "id": "merge", "options": {} }, { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "Count", "name": "Cluster" } } }],
       "type": "table"
     },
     {
@@ -113,7 +116,7 @@
         "refId": "A"
       }],
       "title": "Hosts by connection state",
-      "transformations": [{ "id": "merge", "options": {} }, { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "Count", "connection_state": "State" } }],
+      "transformations": [{ "id": "merge", "options": {} }, { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "Count", "connection_state": "State" } } }],
       "type": "table"
     },
     {
@@ -130,7 +133,7 @@
         "refId": "A"
       }],
       "title": "VMs by power state",
-      "transformations": [{ "id": "merge", "options": {} }, { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "Count", "power_state": "Power" } }],
+      "transformations": [{ "id": "merge", "options": {} }, { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "Count", "power_state": "Power" } } }],
       "type": "table"
     },
     {
@@ -148,7 +151,7 @@
       }],
       "fieldConfig": { "defaults": { "unit": "percent", "decimals": 1 }, "overrides": [] },
       "title": "Total storage free %",
-      "transformations": [{ "id": "merge", "options": {} }, { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "Free %" } }],
+      "transformations": [{ "id": "merge", "options": {} }, { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "Free %" } } }],
       "type": "table"
     }
   ],

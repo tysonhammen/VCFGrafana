@@ -1,6 +1,6 @@
 # vCenter Grafana dashboards
 
-Pre-built Grafana dashboards that show **clusters**, **hosts**, **storage**, and **VMs** from the vCenter Prometheus exporter. They use template variables so you can filter by vCenter, cluster, datastore, and power state.
+Pre-built Grafana dashboards show **clusters**, **hosts**, **storage**, **VMs**, and **performance** (CPU/memory for hosts and VMs when the vStats API is available). They use template variables so you can filter by vCenter, cluster, datastore, and power state.
 
 ## Prerequisites
 
@@ -11,11 +11,13 @@ Pre-built Grafana dashboards that show **clusters**, **hosts**, **storage**, and
 
 | Dashboard        | Description |
 |------------------|-------------|
-| **vCenter Overview** | Summary: total clusters, hosts, VMs, datastores; exporter health; tables for clusters, hosts by connection state, VMs by power state, total storage free %. |
+| **vCenter Overview** | Summary: total clusters, hosts, VMs, datastores; exporter health; tables for clusters, hosts by connection state, VMs by power state, total storage free %. Links to Host/VM Performance. |
 | **vCenter Clusters** | Table of all clusters (filter by vCenter). |
 | **vCenter Hosts**     | Table of all hosts with connection state and power state; filter by vCenter and cluster. Connection/power cells are color-coded. |
+| **vCenter Host Performance** | CPU and memory time series and gauges for ESXi hosts (requires vStats metrics; see below). |
 | **vCenter Storage**  | Datastore free %, capacity, and free space; filter by vCenter and datastore name. |
 | **vCenter VMs**      | Table of all VMs with power state, guest OS, cluster, host; filter by vCenter, cluster, and power state. Power cells are color-coded. |
+| **vCenter VM Performance** | CPU and memory time series and gauges for VMs (requires vStats metrics; see below). |
 
 ## Import in Grafana
 
@@ -38,7 +40,9 @@ Each dashboard defines:
 
 All variables support “All” so the view stays dynamic when you have multiple vCenters or clusters.
 
-## Auto-load with provisioning
+## Performance metrics (vStats)
+
+The **vCenter Host Performance** and **vCenter VM Performance** dashboards use the metric `vcenter_perf_value`, which is populated when the exporter can reach the vSphere **vStats** API (Technology Preview). If your vCenter supports vStats, the exporter will collect CPU and memory usage for hosts and VMs and expose them as gauges; the performance dashboards will then show time series and current values. If vStats is not available or returns no data, those dashboards will be empty and the variable dropdowns may show “No data”—in that case use the inventory dashboards (Hosts, VMs, Overview) which do not depend on vStats.
 
 To load these dashboards automatically when Grafana starts, use dashboard provisioning.
 
