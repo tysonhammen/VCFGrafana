@@ -166,7 +166,11 @@ echo "  $REPO_ROOT/.venv/bin/python -m vcenter_exporter.main"
 echo "  or: $REPO_ROOT/.venv/bin/vcenter-exporter"
 echo ""
 if [[ -d /run/systemd/system ]] && command -v systemctl &>/dev/null; then
-  echo "To install and enable a systemd service (run as root):"
-  echo "  sudo $0 --install-systemd"
+  if prompt_yes_no "Install and enable systemd service (start on boot, restart on failure)?" "y"; then
+    SCRIPT_PATH="$REPO_ROOT/$(basename "${BASH_SOURCE[0]:-$0}")"
+    sudo "$SCRIPT_PATH" --install-systemd
+  else
+    echo "Skipped. To install the service later, run: sudo $0 --install-systemd"
+  fi
   echo ""
 fi
