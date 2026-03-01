@@ -1,20 +1,23 @@
 """
 Performance metrics via vSphere Web Services API (PerformanceManager).
 
-Uses the PerformanceManager managed object as documented at:
-https://developer.broadcom.com/xapis/vsphere-web-services-api/latest/vim.PerformanceManager.html
+Follows the pattern from vcf-sdk-python samples:
 
-- QueryPerf(querySpec): retrieve metrics for entities using PerfQuerySpec
-  (entity, metricId with counterId + instance, startTime, endTime, intervalId).
-- Counters are identified by counterId (from perfManager.perfCounter);
-  we map groupInfo.key + nameInfo.key + rollupType to counterId for CPU/memory.
+- VM: vm_perf_example.py
+  https://github.com/vmware/vcf-sdk-python/blob/main/vsphere-samples/pyvmomi-community-samples/samples/vm_perf_example.py
+- Host: esxi_perf_sample.py (same QuerySpec/QueryPerf pattern for HostSystem)
+  https://github.com/vmware/vcf-sdk-python/blob/main/vsphere-samples/pyvmomi-community-samples/samples/esxi_perf_sample.py
+
+- Build counter map from perfManager.perfCounter: full_name = groupInfo.key + "." + nameInfo.key + "." + rollupType
+- QueryAvailablePerfMetric(entity) for available counter IDs per entity
+- QuerySpec(entity, metricId=[MetricId(counterId=cid, instance="*")], maxSample=1) for real-time
+- QueryPerf(querySpec=[spec]) and parse result base.value[].id.counterId, .value[0]
 
 This module is used as a fallback when the REST vStats/stats APIs are unavailable.
 Requires pyvmomi (optional dependency).
 """
 
 import logging
-from datetime import datetime, timedelta
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -29,12 +32,14 @@ except ImportError:
     pyVmomi = None  # type: ignore
 
 
-# Counter name patterns we want (group.name.rollupType); AVERAGE is common for usage.
-# PerformanceManager uses keys like cpu.usagemhz.AVERAGE, mem.usage.AVERAGE (see counter tables).
+# Counter name patterns we want (group.name.rollupType); match perfCounter keys (e.g. cpu.usagemhz.LATEST, cpu.usage.average).
 PERF_COUNTER_PATTERNS = [
     "cpu.usagemhz.average",
     "cpu.usage.average",
     "mem.usage.average",
+    "cpu.usagemhz.latest",
+    "cpu.usage.latest",
+    "mem.usage.latest",
 ]
 
 
@@ -61,54 +66,44 @@ def _parse_server_host(server: str) -> tuple[str, int]:
 
 
 def _build_counter_map(perf_manager: Any) -> dict[str, int]:
-    """Build full_name -> counterId from PerformanceManager.perfCounter (PerfCounterInfo)."""
+    """Build full_name -> counterId from perfManager.perfCounter (same as vm_perf_example.py)."""
     counter_info: dict[str, int] = {}
     for counter in getattr(perf_manager, "perfCounter", []) or []:
         try:
             group = getattr(counter.groupInfo, "key", "") or ""
             name = getattr(counter.nameInfo, "key", "") or ""
             rollup = getattr(counter, "rollupType", None)
-            rollup_key = (rollup.key if hasattr(rollup, "key") else str(rollup)).lower() if rollup else ""
-            full_name = f"{group}.{name}.{rollup_key}"
+            rollup_str = getattr(rollup, "key", str(rollup)) if rollup else ""
+            full_name = f"{group}.{name}.{rollup_str}"
             counter_info[full_name] = counter.key
         except Exception as e:
             logger.debug("Skip counter %s: %s", counter, e)
     return counter_info
 
 
-def _select_metric_ids(
-    perf_manager: Any,
-    counter_map: dict[str, int],
-    entity: Any,
-) -> list[Any]:
-    """Get PerfMetricId list for CPU/memory for the given entity (QueryAvailablePerfMetric)."""
+def _metric_ids_for_entity(perf_manager: Any, counter_map: dict[str, int], entity: Any) -> list[Any]:
+    """Build MetricId list for entity (QueryAvailablePerfMetric then filter to wanted counter IDs)."""
     if not HAS_PYVMOMI or pyVmomi is None:
         return []
     vim = pyVmomi.vim
     available = perf_manager.QueryAvailablePerfMetric(entity=entity)
     if not available:
         return []
-    wanted_ids = set()
-    for pattern in PERF_COUNTER_PATTERNS:
-        cid = counter_map.get(pattern)
-        if cid is not None:
-            wanted_ids.add(cid)
+    patterns_lower = [p.lower() for p in PERF_COUNTER_PATTERNS]
+    wanted = set()
+    for full_name, cid in counter_map.items():
+        if full_name.lower() in patterns_lower or any(p in full_name.lower() for p in ("cpu.usage", "mem.usage")):
+            wanted.add(cid)
     metric_ids = []
     for m in available:
         cid = m.counterId
-        if cid in wanted_ids or not wanted_ids:
-            instance = getattr(m, "instance", "") or "*"
-            metric_ids.append(vim.PerformanceManager.MetricId(counterId=cid, instance=instance))
-            if wanted_ids and cid in wanted_ids and len(metric_ids) >= len(PERF_COUNTER_PATTERNS) * 2:
+        if cid in wanted or not wanted:
+            metric_ids.append(vim.PerformanceManager.MetricId(counterId=cid, instance="*"))
+            if wanted and len(metric_ids) >= 20:
                 break
     if not metric_ids and available:
-        for m in available[:6]:
-            metric_ids.append(
-                vim.PerformanceManager.MetricId(
-                    counterId=m.counterId,
-                    instance=getattr(m, "instance", "") or "*",
-                )
-            )
+        for m in available[:10]:
+            metric_ids.append(vim.PerformanceManager.MetricId(counterId=m.counterId, instance="*"))
     return metric_ids
 
 
@@ -124,10 +119,10 @@ def query_performance(
     time_window_seconds: int = 300,
 ) -> list[tuple[str, str, str, float]]:
     """
-    Query PerformanceManager (Web Services API) for host and VM metrics.
+    Query PerformanceManager for host and VM metrics (real-time, maxSample=1).
 
+    Follows vm_perf_example.py: QuerySpec(entity, metricId, maxSample=1), QueryPerf.
     Returns list of (resource_type, resource_id, metric_name, value).
-    resource_type is HOST or VM; metric_name is a safe key like cpu_usage_average.
     """
     if not HAS_PYVMOMI:
         logger.debug("pyvmomi not installed; skipping PerformanceManager path")
@@ -159,10 +154,7 @@ def query_performance(
             logger.debug("PerformanceManager: no perfCounter list")
             return []
 
-        end_time = datetime.utcnow()
-        start_time = end_time - timedelta(seconds=time_window_seconds)
         results: list[tuple[str, str, str, float]] = []
-
         entities_specs: list[tuple[str, str, Any]] = []
         for hid in host_ids:
             try:
@@ -178,15 +170,14 @@ def query_performance(
                 pass
 
         for rtype, rid, entity in entities_specs:
-            metric_ids = _select_metric_ids(perf_manager, counter_map, entity)
+            metric_ids = _metric_ids_for_entity(perf_manager, counter_map, entity)
             if not metric_ids:
                 continue
             try:
+                # Real-time: maxSample=1 like vm_perf_example.py (no startTime/endTime)
                 spec = vim.PerformanceManager.QuerySpec(
                     entity=entity,
                     metricId=metric_ids,
-                    startTime=start_time,
-                    endTime=end_time,
                     maxSample=1,
                 )
                 query_result = perf_manager.QueryPerf(querySpec=[spec])
@@ -208,7 +199,8 @@ def query_performance(
                     vals = getattr(series, "value", None) or []
                     if vals:
                         try:
-                            results.append((rtype, rid, metric_safe, float(vals[-1])))
+                            # Use first sample like vm_perf_example.py: val.value[0]
+                            results.append((rtype, rid, metric_safe, float(vals[0])))
                         except (TypeError, ValueError):
                             pass
     finally:
