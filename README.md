@@ -164,6 +164,8 @@ See [vSphere Automation API](https://developer.broadcom.com/xapis/vsphere-automa
 
 ## Grafana
 
+Pre-built dashboards are in the **[dashboards/](dashboards/)** folder. Import the JSON files via **Dashboards** → **Import** → **Upload JSON file**, or use [Grafana provisioning](dashboards/README.md#auto-load-with-provisioning) to load them automatically.
+
 Use Prometheus as a data source and build dashboards from the `vcenter_*` metrics. Example queries:
 
 - Clusters: `count(vcenter_cluster_info) by (vcenter, name)`

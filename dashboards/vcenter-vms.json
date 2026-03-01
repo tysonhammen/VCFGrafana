@@ -1,0 +1,108 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "custom": { "align": "auto" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Power" }, "properties": [{ "id": "custom.cellOptions", "value": { "type": "color-background" } }, { "id": "mappings", "value": [{ "options": { "POWERED_ON": { "color": "green", "index": 0 } }, "type": "value" }, { "options": { "POWERED_OFF": { "color": "gray", "index": 0 } }, "type": "value" }, { "options": { "SUSPENDED": { "color": "yellow", "index": 0 } }, "type": "value" }, { "options": { "UNKNOWN": { "color": "orange", "index": 0 } }, "type": "value" }] }] }
+        ]
+      },
+      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": true, "reducer": ["sum"], "countRows": true }, "frameIndex": 0 },
+      "pluginVersion": "9.0.0",
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "expr": "vcenter_vm_info{vcenter=~\"$vcenter\", cluster=~\"$cluster\", power_state=~\"$power_state\"}",
+        "format": "table",
+        "instant": true,
+        "refId": "A"
+      }],
+      "title": "VMs",
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "Value": true }, "renameByName": { "vcenter": "vCenter", "vm_id": "VM ID", "name": "Name", "power_state": "Power", "guest_os": "Guest OS", "cluster": "Cluster", "host": "Host" } } }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["vcenter", "vms"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "Prometheus", "value": "Prometheus" },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Data source",
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "skipUrlSync": false,
+        "type": "datasource",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "label": "vCenter",
+        "multi": true,
+        "name": "vcenter",
+        "options": [],
+        "allValue": ".*",
+        "query": "label_values(vcenter_vm_info, vcenter)",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "label": "Cluster",
+        "multi": true,
+        "name": "cluster",
+        "options": [],
+        "allValue": ".*",
+        "query": "label_values(vcenter_vm_info{vcenter=~\"$vcenter\"}, cluster)",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "label": "Power state",
+        "multi": true,
+        "name": "power_state",
+        "options": [],
+        "allValue": ".*",
+        "query": "label_values(vcenter_vm_info{vcenter=~\"$vcenter\"}, power_state)",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "vCenter VMs",
+  "uid": "vcenter-vms",
+  "version": 1,
+  "weekStart": ""
+}

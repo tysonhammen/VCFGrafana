@@ -1,0 +1,143 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 20 }, { "color": "red", "value": 10 }] }, "unit": "percent", "min": 0, "max": 100 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Free %" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "min", "value": 0 }, { "id": "max", "value": 100 }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 10 }, { "color": "green", "value": 20 }] } }] }
+        ]
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false }, "frameIndex": 0 },
+      "pluginVersion": "9.0.0",
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "expr": "vcenter_datastore_free_bytes{vcenter=~\"$vcenter\", name=~\"$datastore\"} / vcenter_datastore_capacity_bytes{vcenter=~\"$vcenter\", name=~\"$datastore\"} * 100",
+        "format": "table",
+        "instant": true,
+        "legendFormat": "{{ name }}",
+        "refId": "A"
+      }],
+      "title": "Datastore free space %",
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "Free %", "name": "Datastore", "vcenter": "vCenter" } } }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }, "unit": "decbytes" },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 10 },
+      "id": 2,
+      "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false }, "frameIndex": 0 },
+      "pluginVersion": "9.0.0",
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "expr": "vcenter_datastore_capacity_bytes{vcenter=~\"$vcenter\", name=~\"$datastore\"}",
+        "format": "table",
+        "instant": true,
+        "refId": "A"
+      }],
+      "title": "Datastore capacity",
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "Capacity", "name": "Datastore", "vcenter": "vCenter" } } }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }, "unit": "decbytes" },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 10 },
+      "id": 3,
+      "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false }, "frameIndex": 0 },
+      "pluginVersion": "9.0.0",
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "expr": "vcenter_datastore_free_bytes{vcenter=~\"$vcenter\", name=~\"$datastore\"}",
+        "format": "table",
+        "instant": true,
+        "refId": "A"
+      }],
+      "title": "Datastore free space",
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "Free", "name": "Datastore", "vcenter": "vCenter" } } }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["vcenter", "storage"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "Prometheus", "value": "Prometheus" },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Data source",
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "skipUrlSync": false,
+        "type": "datasource",
+        "datasource": { "type": "prometheus", "uid": "prometheus" }
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "label": "vCenter",
+        "multi": true,
+        "name": "vcenter",
+        "options": [],
+        "allValue": ".*",
+        "query": "label_values(vcenter_datastore_info, vcenter)",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "label": "Datastore",
+        "multi": true,
+        "name": "datastore",
+        "options": [],
+        "allValue": ".*",
+        "query": "label_values(vcenter_datastore_info{vcenter=~\"$vcenter\"}, name)",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "vCenter Storage",
+  "uid": "vcenter-storage",
+  "version": 1,
+  "weekStart": ""
+}

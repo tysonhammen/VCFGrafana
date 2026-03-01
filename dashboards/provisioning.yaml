@@ -1,0 +1,21 @@
+# Copy this file to Grafana's dashboard provisioning directory, e.g.:
+#   /etc/grafana/provisioning/dashboards/vcenter.yaml
+# and set 'path' to the directory containing the vcenter-*.json files.
+#
+# Example (Grafana on Linux):
+#   sudo mkdir -p /etc/grafana/provisioning/dashboards/vcenter
+#   sudo cp /path/to/VCFGrafana/dashboards/*.json /etc/grafana/provisioning/dashboards/vcenter/
+#   sudo cp /path/to/VCFGrafana/dashboards/provisioning.yaml /etc/grafana/provisioning/dashboards/vcenter.yaml
+#   # Edit vcenter.yaml and set path: /etc/grafana/provisioning/dashboards/vcenter
+#   sudo systemctl restart grafana-server
+#
+apiVersion: 1
+providers:
+  - name: 'vcenter'
+    orgId: 1
+    folder: 'vCenter'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/vcenter
