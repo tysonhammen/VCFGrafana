@@ -161,28 +161,33 @@ def query_performance(
 
         def _make_mor(mo_type: str, mo_id: str) -> Any:
             """Build ManagedObjectReference; try constructor then attr-based."""
+            err: Optional[Exception] = None
             try:
                 return vim.ManagedObjectReference(mo_type, mo_id)
-            except Exception as e1:
-                pass
+            except Exception as e:
+                err = e
             try:
                 return vim.ManagedObjectReference(type=mo_type, value=mo_id)
-            except Exception as e2:
-                pass
+            except Exception as e:
+                if err is None:
+                    err = e
             try:
                 mo = vim.ManagedObjectReference()
                 setattr(mo, "type", mo_type)
                 mo.value = mo_id
                 return mo
-            except Exception as e3:
-                pass
+            except Exception as e:
+                if err is None:
+                    err = e
             try:
                 mo = vim.ManagedObjectReference()
                 mo._type = mo_type
                 mo.value = mo_id
                 return mo
-            except Exception as e4:
-                raise type(e1)(f"{mo_type} {mo_id}: {e1!s}; {e4!s}") from e4
+            except Exception as e:
+                if err is None:
+                    err = e
+            raise type(err)(f"{mo_type} {mo_id}: {err!s}") from err
 
         for hid in host_ids:
             try:
