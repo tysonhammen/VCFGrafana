@@ -16,6 +16,7 @@ from typing import Any, Optional
 from prometheus_client.core import GaugeMetricFamily, REGISTRY
 
 from .vcenter_client import VCenterClient, VCenterAPIError
+from . import perf_manager
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +232,7 @@ class VCenterCollector:
         yield vm_count
 
     def _collect_performance(self):
-        """Collect host and VM performance from vStats API (Technology Preview)."""
+        """Collect host and VM performance from stats API, with PerformanceManager fallback when REST fails or returns no data."""
         logger.debug("Performance collection: starting")
         end_sec = int(time.time())
         start_sec = end_sec - 300  # last 5 minutes
@@ -250,46 +251,65 @@ class VCenterCollector:
         except Exception as e:
             logger.debug("Could not build resource name maps: %s", e, exc_info=True)
 
+        points: list[tuple[str, str, str, float]] = []
         try:
             available = self.client.get_vstats_metrics()
         except VCenterAPIError as e:
             _log_perf_failure("metrics", e)
-            return
-        if not available:
-            logger.debug("vStats metrics: empty list, skipping performance")
-            return
-        metrics_to_use = list(dict.fromkeys(m for m in (VSTATS_METRICS_HOST + VSTATS_METRICS_VM) if m in available))
-        if not metrics_to_use:
-            metrics_to_use = available[:10]
-            logger.debug("vStats: preferred metrics not in available list, using first 10: %s", metrics_to_use)
         else:
-            logger.debug("vStats: using metrics %s", metrics_to_use)
-        rsrcs = [f"type.HOST={hid}" for hid in host_id_to_name] + [f"type.VM={vid}" for vid in vm_id_to_name]
-        try:
-            data = self.client.get_vstats_data(
-                types=["HOST", "VM"],
-                start_sec=start_sec,
-                end_sec=end_sec,
-                metrics=metrics_to_use,
-                rsrcs=rsrcs,
-            )
-        except VCenterAPIError as e:
-            _log_perf_failure("data", e)
-            return
+            if not available:
+                logger.debug("vStats metrics: empty list")
+            else:
+                metrics_to_use = list(dict.fromkeys(m for m in (VSTATS_METRICS_HOST + VSTATS_METRICS_VM) if m in available))
+                if not metrics_to_use:
+                    metrics_to_use = available[:10]
+                    logger.debug("vStats: preferred metrics not in available list, using first 10: %s", metrics_to_use)
+                else:
+                    logger.debug("vStats: using metrics %s", metrics_to_use)
+                rsrcs = [f"type.HOST={hid}" for hid in host_id_to_name] + [f"type.VM={vid}" for vid in vm_id_to_name]
+                data: Any = None
+                try:
+                    data = self.client.get_vstats_data(
+                        types=["HOST", "VM"],
+                        start_sec=start_sec,
+                        end_sec=end_sec,
+                        metrics=metrics_to_use,
+                        rsrcs=rsrcs,
+                    )
+                    points = self._parse_vstats_data(data)
+                    logger.debug("vStats data parsed: %d points", len(points))
+                except VCenterAPIError as e:
+                    _log_perf_failure("data", e)
+                if not points and data is not None:
+                    if isinstance(data, list):
+                        logger.debug("vStats parse produced no points; raw list len=%d", len(data))
+                    else:
+                        logger.debug("vStats parse produced no points; raw data type=%s", type(data).__name__)
 
-        points = self._parse_vstats_data(data)
-        logger.debug("vStats data parsed: %d points", len(points))
+        if not points and (host_id_to_name or vm_id_to_name):
+            try:
+                fallback = perf_manager.query_performance(
+                    server=self.client.server,
+                    user=self.client.user,
+                    password=self.client.password,
+                    verify_ssl=self.client.verify_ssl,
+                    host_ids=list(host_id_to_name.keys()),
+                    vm_ids=list(vm_id_to_name.keys()),
+                    host_id_to_name=host_id_to_name,
+                    vm_id_to_name=vm_id_to_name,
+                )
+                if fallback:
+                    points = fallback
+                    logger.debug("Performance from PerformanceManager fallback: %d points", len(points))
+            except Exception as e:
+                logger.debug("PerformanceManager fallback failed: %s", e, exc_info=True)
+
         if not points:
-            logger.debug("vStats parse produced no points; raw data type=%s", type(data).__name__)
-            if isinstance(data, dict):
-                logger.debug("vStats raw keys: %s", list(data.keys()))
-            elif isinstance(data, list):
-                logger.debug("vStats raw list len=%d first item keys: %s", len(data), list(data[0].keys()) if data and isinstance(data[0], dict) else "n/a")
             return
 
         gauge = GaugeMetricFamily(
             "vcenter_perf_value",
-            "vCenter performance metric (vStats; latest value in window)",
+            "vCenter performance metric (stats API or PerformanceManager fallback; latest value)",
             labels=["vcenter", "resource_type", "resource_id", "resource_name", "metric"],
         )
         for (rtype, rid, metric_name, value) in points:

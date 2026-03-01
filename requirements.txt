@@ -4,3 +4,5 @@ requests>=2.28.0
 prometheus_client>=0.19.0
 python-dotenv>=1.0.0
 vmware-vcenter>=9.0.0.0
+# Optional: for performance metrics when REST stats API is unavailable or returns no data
+pyvmomi>=8.0.0.0
