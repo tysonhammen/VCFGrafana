@@ -287,6 +287,7 @@ class VCenterCollector:
                         logger.debug("vStats parse produced no points; raw data type=%s", type(data).__name__)
 
         if not points and (host_id_to_name or vm_id_to_name):
+            logger.debug("Trying PerformanceManager fallback (pyvmomi) for host/VM metrics")
             try:
                 fallback = perf_manager.query_performance(
                     server=self.client.server,
@@ -301,6 +302,10 @@ class VCenterCollector:
                 if fallback:
                     points = fallback
                     logger.debug("Performance from PerformanceManager fallback: %d points", len(points))
+                else:
+                    logger.info(
+                        "PerformanceManager fallback returned no data. Install pyvmomi for host/VM metrics: pip install pyvmomi"
+                    )
             except Exception as e:
                 logger.debug("PerformanceManager fallback failed: %s", e, exc_info=True)
 
