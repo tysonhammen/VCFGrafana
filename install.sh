@@ -12,7 +12,7 @@ prompt_value() {
   if [[ -n "$default" ]]; then
     if [[ -n "$secret" ]]; then
       read -r -s -p "$name [$default]: " val
-      echo
+      echo >&2
     else
       read -r -p "$name [$default]: " val
     fi
@@ -20,7 +20,7 @@ prompt_value() {
   else
     if [[ -n "$secret" ]]; then
       read -r -s -p "$name: " val
-      echo
+      echo >&2
     else
       read -r -p "$name: " val
     fi
@@ -90,8 +90,8 @@ ensure_venv() {
     python3 -m venv "$REPO_ROOT/.venv"
   fi
   echo "Installing/upgrading package in .venv ..."
-  "$REPO_ROOT/.venv/bin/pip" install -q --upgrade pip
-  "$REPO_ROOT/.venv/bin/pip" install -q -e "$REPO_ROOT"
+  "$REPO_ROOT/.venv/bin/python" -m pip install -q --upgrade pip
+  "$REPO_ROOT/.venv/bin/python" -m pip install -q -e "$REPO_ROOT"
   echo "Python environment ready."
 }
 
