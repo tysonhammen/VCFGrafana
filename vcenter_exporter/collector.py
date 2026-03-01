@@ -233,7 +233,7 @@ class VCenterCollector:
         if not available:
             logger.debug("vStats metrics: empty list, skipping performance")
             return
-        metrics_to_use = [m for m in (VSTATS_METRICS_HOST + VSTATS_METRICS_VM) if m in available]
+        metrics_to_use = list(dict.fromkeys(m for m in (VSTATS_METRICS_HOST + VSTATS_METRICS_VM) if m in available))
         if not metrics_to_use:
             metrics_to_use = available[:10]
             logger.debug("vStats: preferred metrics not in available list, using first 10: %s", metrics_to_use)

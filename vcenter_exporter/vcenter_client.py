@@ -161,7 +161,7 @@ class VCenterClient:
         if types:
             params["types"] = types
         if metrics:
-            params["metric"] = metrics
+            params["metric"] = list(dict.fromkeys(metrics))
         if rsrcs:
             params["rsrcs"] = rsrcs
         path = "/api/vstats/stats/data/dp"

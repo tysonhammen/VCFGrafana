@@ -8,6 +8,7 @@ Usage:
 """
 
 import logging
+import os
 import sys
 
 from prometheus_client import start_http_server
@@ -33,13 +34,21 @@ def setup_logging(config: dict) -> None:
     root.addHandler(console)
     if log_file:
         try:
-            fh = logging.FileHandler(log_file, encoding="utf-8")
+            path = os.path.abspath(log_file)
+            parent = os.path.dirname(path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            fh = logging.FileHandler(path, encoding="utf-8")
             fh.setLevel(log_level)
             fh.setFormatter(logging.Formatter(fmt))
             root.addHandler(fh)
-            logging.getLogger("vcenter_exporter").info("Logging to file: %s", log_file)
+            logging.getLogger("vcenter_exporter").info("Logging to file: %s", path)
         except OSError as e:
-            logging.getLogger("vcenter_exporter").warning("Could not open log file %s: %s", log_file, e)
+            msg = "Could not open log file %s: %s" % (log_file, e)
+            logging.getLogger("vcenter_exporter").warning(msg)
+            print(msg, file=sys.stderr)
+    else:
+        logging.getLogger("vcenter_exporter").info("LOG_FILE not set; logging to stdout only")
 
 
 def main() -> None:
