@@ -15,17 +15,18 @@ A **Python** monitoring service that uses the **[VCF SDK for Python](https://git
 
 ## Install with script (Linux)
 
-On Linux you can use the install script to gather configuration interactively, create a virtual environment, and optionally install and enable a systemd service.
+The install script **must be run as root**. It copies the repository into a system directory (default `/opt/vcenter-exporter`), creates a virtual environment there, and installs a systemd service that runs as root.
 
-1. **Clone or unpack** the repo and go to its directory:
+1. **Clone or unpack** the repo:
    ```bash
-   cd /path/to/VCFGrafana
+   git clone https://github.com/tysonhammen/VCFGrafana.git
+   cd VCFGrafana
    ```
 
-2. **Run the installer** (as the user that will own the process, not root):
+2. **Run the installer as root** (installs to `/opt/vcenter-exporter` by default):
    ```bash
    chmod +x install.sh
-   ./install.sh
+   sudo ./install.sh
    ```
    You will be prompted for:
    - **vCenter URL** (e.g. `https://vcenter.example.com`) – required
@@ -35,51 +36,31 @@ On Linux you can use the install script to gather configuration interactively, c
    - **Exporter listen address** (default: `0.0.0.0`)
    - **Exporter port** (default: `9680`)
 
-   The script creates `.env`, a `.venv` virtual environment, and installs the package.
+   The script copies files to `/opt/vcenter-exporter`, creates a `.venv` there, writes `.env`, and installs/enables the systemd service.
 
-3. **Install and enable the systemd service** (so the exporter runs on boot and restarts on failure):
+3. **Optional:** Install to a different directory:
    ```bash
-   sudo ./install.sh --install-systemd
+   sudo ./install.sh --prefix /opt/my-vcenter-exporter
    ```
-   This creates `/etc/systemd/system/vcenter-exporter.service`, enables it, and starts it. The service runs as the user that owns the repo directory.
 
    **Useful commands:**
-   - `sudo systemctl status vcenter-exporter` – status
+   - `systemctl status vcenter-exporter` – status
    - `journalctl -u vcenter-exporter -f` – follow logs
-   - `sudo systemctl restart vcenter-exporter` – restart after config/code changes
-   - `sudo systemctl stop vcenter-exporter` – stop
+   - `systemctl restart vcenter-exporter` – restart after config/code changes
+   - `systemctl stop vcenter-exporter` – stop
 
-   To **re-run the installer** (e.g. to change config), run `./install.sh` again. If `.env` already exists, you will be asked whether to overwrite it.
+## Quick start (manual / development)
 
-## Quick start
+If you prefer not to use the install script, you can run the exporter from a clone with a virtual environment:
 
 ### 1. Install dependencies
 
-The exporter requires **vmware-vcenter** (from the [VCF SDK for Python](https://github.com/vmware/vcf-sdk-python)). Install it with the rest of the dependencies:
-
-**Option A – no root (recommended)**  
-Use a virtual environment or install into your user directory:
-
 ```bash
-# Using a virtual environment (recommended)
 python3 -m venv .venv
 source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-# or: pip install -e .
-
-# Or install into your user directory (no venv)
-pip install --user -r requirements.txt
-# or: pip install --user -e .
+pip install -e .
 ```
-
-**Option B – system install (requires root)**
-
-```bash
-pip install -r requirements.txt
-# or: sudo pip install -e .
-```
-
-If you see **Permission denied** writing to `/usr/local/...`, use Option A (venv or `pip install --user`).
 
 ### 2. Configure
 
@@ -113,14 +94,14 @@ EXPORTER_PORT=9680
 - **LOG_FILE** – Optional. If set, all logs are also written to this file (e.g. `/var/log/vcenter-exporter.log`). Useful when running as a service so you can inspect logs without `journalctl`.
 - **LOG_LEVEL** – Optional. Set to `DEBUG` to troubleshoot performance/stats (e.g. why `vcenter_perf_value` is missing). Default `INFO`. Use with `LOG_FILE` to capture debug output to a file.
 
-If the service runs as a non-root user (e.g. `idadm`) and you use `LOG_FILE=/var/log/vcenter-exporter.log`, create the file and give the service user write permission before starting:
+If the service runs as a non-root user (e.g. when running manually) and you use `LOG_FILE=/var/log/vcenter-exporter.log`, create the file and give that user write permission before starting:
 
 ```bash
 sudo touch /var/log/vcenter-exporter.log
 sudo chown idadm:idadm /var/log/vcenter-exporter.log
 ```
 
-Alternatively, use a path the user can write without root (e.g. `LOG_FILE=/home/idadm/VCFGrafana/logs/vcenter-exporter.log`); the exporter will create the `logs` directory if needed.
+Alternatively, use a path the user can write without root (e.g. `LOG_FILE=/tmp/vcenter-exporter.log`); the exporter will create parent directories if needed. To change vCenter settings after install, see [Updating from previous versions](#updating-from-previous-versions) (use `--reconfigure`).
 
 ### 3. Run the exporter
 
@@ -197,29 +178,25 @@ Use Prometheus as a data source and build dashboards from the `vcenter_*` metric
 
 ## Updating from previous versions
 
-The exporter **requires the VCF SDK (vmware-vcenter)**; there is no REST-only fallback. After pulling new code, run the upgrade script to clean old bytecode and ensure the SDK is installed:
+After pulling new code in your clone, upgrade the installed copy in `/opt/vcenter-exporter` and restart the service:
 
-1. **Pull the latest code** (if you cloned the repo):
+1. **Pull the latest code** (in your clone):
    ```bash
    cd /path/to/VCFGrafana
    git pull origin main
    ```
 
-2. **Run the upgrade** (cleans old implementations and installs/verifies vmware-vcenter):
+2. **Run the upgrade** (copies files and refreshes the venv at the install prefix):
    ```bash
-   ./install.sh --upgrade
+   sudo ./install.sh --upgrade
    ```
-   This removes `__pycache__` and `.pyc` files, installs/upgrades dependencies from `requirements.txt`, and verifies that the VCF SDK can be imported. If you use a virtual environment elsewhere, run the same steps there: clean bytecode, then `pip install -r requirements.txt` and confirm `vmware-vcenter` is installed.
+   This copies the updated repo to `/opt/vcenter-exporter`, runs `pip install --upgrade -r requirements.txt` and `pip install -e .` there, and restarts the service. Use `sudo ./install.sh --prefix /path/to/install --upgrade` if you installed to a different directory.
 
-3. **Restart the exporter**:
+3. **Reconfigure** (change vCenter URL, password, etc.) without reinstalling:
    ```bash
-   # If running under systemd:
-   sudo systemctl restart vcenter-exporter
-   # Or stop the current process (Ctrl+C) and start again:
-   .venv/bin/python -m vcenter_exporter.main
+   sudo ./install.sh --reconfigure
    ```
-
-4. **Check the changelog** (if present) for any config or metric changes.
+   Use `--prefix /path` if you installed to a non-default path.
 
 ## License
 
