@@ -12,6 +12,7 @@ A **Python** monitoring service that uses the [vSphere Automation API](https://d
 - Python 3.10+
 - vCenter 6.5+ with vSphere Automation API (REST) enabled
 - Network access from the exporter to vCenter (HTTPS, typically 443)
+- **[vmware-vcenter](https://github.com/vmware/vcf-sdk-python)** (VCF SDK for Python) for vCenter inventory and authentication
 
 ## Install with script (Linux)
 
@@ -54,6 +55,8 @@ On Linux you can use the install script to gather configuration interactively, c
 ## Quick start
 
 ### 1. Install dependencies
+
+The exporter requires **vmware-vcenter** (from the [VCF SDK for Python](https://github.com/vmware/vcf-sdk-python)). Install it with the rest of the dependencies:
 
 **Option A – no root (recommended)**  
 Use a virtual environment or install into your user directory:
@@ -111,6 +114,15 @@ EXPORTER_PORT=9680
 - **LOG_FILE** – Optional. If set, all logs are also written to this file (e.g. `/var/log/vcenter-exporter.log`). Useful when running as a service so you can inspect logs without `journalctl`.
 - **LOG_LEVEL** – Optional. Set to `DEBUG` to troubleshoot performance/vStats (e.g. why `vcenter_perf_value` is missing). Default `INFO`. Use with `LOG_FILE` to capture debug output to a file.
 
+If the service runs as a non-root user (e.g. `idadm`) and you use `LOG_FILE=/var/log/vcenter-exporter.log`, create the file and give the service user write permission before starting:
+
+```bash
+sudo touch /var/log/vcenter-exporter.log
+sudo chown idadm:idadm /var/log/vcenter-exporter.log
+```
+
+Alternatively, use a path the user can write without root (e.g. `LOG_FILE=/home/idadm/VCFGrafana/logs/vcenter-exporter.log`); the exporter will create the `logs` directory if needed.
+
 ### 3. Run the exporter
 
 ```bash
@@ -165,16 +177,13 @@ Reload or restart Prometheus so it scrapes the new target.
 
 ## API reference
 
-The exporter uses the vSphere Automation REST API:
+The exporter uses the **[VCF SDK for Python](https://github.com/vmware/vcf-sdk-python)** (vmware-vcenter) to connect to vCenter:
 
-- **Authentication:** `POST /api/session` (Basic auth) → session ID in response; subsequent requests use header `vmware-api-session-id`.
-- **Clusters:** `GET /api/vcenter/cluster`
-- **Hosts:** `GET /api/vcenter/host`
-- **Datastores:** `GET /api/vcenter/datastore`
-- **VMs:** `GET /api/vcenter/vm`
-- **Performance (vStats, Technology Preview):** `GET /api/vstats/stats/metrics`, `GET /api/vstats/stats/data/dp` — when available, the exporter collects CPU/memory metrics for hosts and VMs.
+- **Connection:** `create_vsphere_client(server, username, password, session)` from `vmware.vapi.vsphere.client`
+- **Inventory:** `vcenter.Cluster.list()`, `vcenter.Host.list()`, `vcenter.Datastore.list()`, `vcenter.VM.list()`
+- **Performance (optional):** When vStats/REST stats APIs are available, the exporter uses the same session to call `/api/stats/metrics` and `/api/stats/data/dp` (or `/api/vstats/...`) for CPU/memory metrics.
 
-See [vSphere Automation API](https://developer.broadcom.com/xapis/vsphere-automation-api/latest/) for full documentation.
+See [vSphere Automation API](https://developer.broadcom.com/xapis/vsphere-automation-api/latest/) and [VCF SDK Python](https://github.com/vmware/vcf-sdk-python) for documentation.
 
 ## Grafana
 

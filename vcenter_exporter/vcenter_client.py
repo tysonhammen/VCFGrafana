@@ -1,20 +1,26 @@
 """
-vSphere Automation API client.
+vCenter client using the VCF SDK for Python (vmware-vcenter).
 
-Uses the vCenter REST API as documented at:
-https://developer.broadcom.com/xapis/vsphere-automation-api/latest/
+Uses create_vsphere_client from vmware.vapi.vsphere.client to connect to vCenter
+and access inventory (Cluster, Host, Datastore, VM). Performance metrics (vStats/stats)
+are requested via the same session when the SDK does not expose them.
 
-Authentication: POST /api/session with Basic auth, then use
-vmware-api-session-id header on subsequent requests.
+See: https://github.com/vmware/vcf-sdk-python
 """
 
 import logging
-import time
 from typing import Any, Optional
 
 import requests
 
 logger = logging.getLogger(__name__)
+
+try:
+    from vmware.vapi.vsphere.client import create_vsphere_client
+    HAS_VSPHERE_CLIENT = True
+except ImportError:
+    HAS_VSPHERE_CLIENT = False
+    create_vsphere_client = None  # type: ignore
 
 
 class VCenterAPIError(Exception):
@@ -26,11 +32,29 @@ class VCenterAPIError(Exception):
         super().__init__(message)
 
 
+def _summary_to_dict(obj: Any, *keys: str) -> dict:
+    """Convert SDK Summary/Info object to dict; use keys for attribute names (snake_case)."""
+    out: dict[str, Any] = {}
+    for k in keys:
+        v = getattr(obj, k, None)
+        if v is None:
+            out[k] = None
+            continue
+        if hasattr(v, "string"):
+            out[k] = v.string
+        elif hasattr(v, "value"):
+            out[k] = v.value
+        else:
+            out[k] = v
+    return out
+
+
 class VCenterClient:
     """
-    Client for the vSphere Automation REST API.
+    Client for vCenter using the VCF SDK (vmware-vcenter).
 
-    Session-based authentication; session is refreshed when expired.
+    Uses create_vsphere_client for inventory; uses the same HTTP session
+    for stats API calls when needed.
     """
 
     def __init__(
@@ -47,45 +71,42 @@ class VCenterClient:
         self.verify_ssl = verify_ssl
         self.session_timeout_seconds = session_timeout_seconds
 
+        self._client: Any = None
         self._session: Optional[requests.Session] = None
-        self._session_created_at: float = 0.0
-
-    def _ensure_session(self) -> requests.Session:
-        """Create or refresh API session if needed."""
-        now = time.monotonic()
-        if self._session is None or (now - self._session_created_at) > self.session_timeout_seconds:
-            self._create_session()
-        return self._session
-
-    def _create_session(self) -> None:
-        """Create a new API session via POST /api/session."""
-        url = f"{self.server}/api/session"
-        self._session = requests.Session()
-        self._session.verify = self.verify_ssl
-        self._session.auth = (self.user, self.password)
-        resp = self._session.post(url)
-        if resp.status_code != 201:
+        if not HAS_VSPHERE_CLIENT:
             raise VCenterAPIError(
-                f"Failed to create session: {resp.status_code}",
-                status_code=resp.status_code,
-                response_text=resp.text,
+                "vmware-vcenter is not installed. Install it with: pip install vmware-vcenter"
             )
-        # Response body is the session ID string (JSON string)
-        session_id = resp.json()
-        self._session.auth = None
-        self._session.headers["vmware-api-session-id"] = session_id
-        self._session_created_at = time.monotonic()
-        logger.debug("vCenter API session created")
+        self._connect()
+
+    def _connect(self) -> None:
+        """Create vSphere client and session."""
+        session = requests.Session()
+        session.verify = self.verify_ssl
+        session.headers["Content-Type"] = "application/json"
+        # create_vsphere_client uses server as hostname (no scheme)
+        host = self.server
+        if host.startswith("https://"):
+            host = host[8:]
+        if host.startswith("http://"):
+            host = host[7:]
+        if "/" in host:
+            host = host.split("/")[0]
+        self._client = create_vsphere_client(
+            server=host,
+            username=self.user,
+            password=self.password,
+            session=session,
+        )
+        self._session = session
+        logger.debug("vCenter SDK client connected")
 
     def _get(self, path: str, params: Optional[dict] = None) -> Any:
-        """GET request; returns JSON body. Refreshes session on 401."""
-        session = self._ensure_session()
+        """GET request using the SDK session (for stats API). Returns JSON."""
+        if self._session is None:
+            self._connect()
         url = f"{self.server}{path}"
-        resp = session.get(url, params=params, timeout=60)
-        if resp.status_code == 401:
-            self._session = None
-            self._create_session()
-            resp = session.get(url, params=params, timeout=60)
+        resp = self._session.get(url, params=params, timeout=60)
         if resp.status_code != 200:
             raise VCenterAPIError(
                 f"GET {path} failed: {resp.status_code}",
@@ -103,33 +124,68 @@ class VCenterClient:
         return []
 
     def list_clusters(self) -> list[dict]:
-        """List all clusters. GET /api/vcenter/cluster."""
-        data = self._get("/api/vcenter/cluster")
-        return self._list_response(data)
+        """List all clusters via vcenter.Cluster.list()."""
+        clusters = self._client.vcenter.Cluster.list()
+        out = []
+        for c in clusters:
+            d = _summary_to_dict(c, "cluster", "name")
+            d.setdefault("name", d.get("cluster", "unknown"))
+            out.append(d)
+        return out
 
     def list_hosts(self) -> list[dict]:
-        """List all hosts. GET /api/vcenter/host."""
-        data = self._get("/api/vcenter/host")
-        return self._list_response(data)
+        """List all hosts via vcenter.Host.list()."""
+        hosts = self._client.vcenter.Host.list()
+        out = []
+        for h in hosts:
+            d = _summary_to_dict(h, "host", "name", "connection_state", "power_state", "cluster")
+            d.setdefault("connection_state", "UNKNOWN")
+            d.setdefault("power_state", "UNKNOWN")
+            d.setdefault("cluster", "")
+            out.append(d)
+        return out
 
     def list_datastores(self) -> list[dict]:
-        """List all datastores. GET /api/vcenter/datastore."""
-        data = self._get("/api/vcenter/datastore")
-        return self._list_response(data)
+        """List all datastores via vcenter.Datastore.list()."""
+        datastores = self._client.vcenter.Datastore.list()
+        out = []
+        for d in datastores:
+            row = _summary_to_dict(d, "datastore", "name", "type", "capacity", "free_space")
+            row.setdefault("capacity", 0)
+            if row.get("free_space") is None:
+                row["free_space"] = getattr(d, "free_space", None) or 0
+            row.setdefault("freeSpace", row.get("free_space"))
+            out.append(row)
+        return out
 
     def list_vms(self) -> list[dict]:
-        """List all VMs. GET /api/vcenter/vm (up to 1000 per request; use filter for more)."""
-        data = self._get("/api/vcenter/vm")
-        return self._list_response(data)
+        """List all VMs via vcenter.VM.list()."""
+        vms = self._client.vcenter.VM.list()
+        out = []
+        for v in vms:
+            d = _summary_to_dict(
+                v, "vm", "name", "power_state", "cpu_count", "memory_size_mib",
+                "guest_OS", "cluster", "host",
+            )
+            d.setdefault("guest_OS", "")
+            d.setdefault("cluster", "")
+            d.setdefault("host", "")
+            placement = getattr(v, "placement", None)
+            if placement:
+                d["cluster"] = d.get("cluster") or getattr(placement, "cluster", "") or ""
+                d["host"] = d.get("host") or getattr(placement, "host", "") or ""
+            if d.get("memory_size_mib") is not None:
+                d["memory_size_MiB"] = d["memory_size_mib"]
+            out.append(d)
+        return out
 
     def get_vstats_metrics(self) -> list[str]:
-        """List available vStats metric names. GET /api/vstats/stats/metrics (Technology Preview)."""
+        """List available vStats/stats metric names via REST (SDK may not expose this)."""
         path = "/api/vstats/stats/metrics"
         try:
             logger.debug("vStats metrics: GET %s%s", self.server, path)
             data = self._get(path)
         except VCenterAPIError as e:
-            logger.debug("vStats metrics %s failed: %s %s", path, e.status_code, e.response_text[:200] if e.response_text else "")
             if e.status_code in (404, 501, 400):
                 path_alt = "/api/stats/metrics"
                 try:
@@ -142,7 +198,6 @@ class VCenterClient:
                 raise
         out = self._list_response(data)
         if not out:
-            logger.debug("vStats metrics: response type=%s keys=%s", type(data).__name__, list(data.keys()) if isinstance(data, dict) else "n/a")
             return []
         result = [m.get("metric", m) if isinstance(m, dict) else str(m) for m in out]
         logger.debug("vStats metrics: got %d metrics, sample: %s", len(result), result[:15])
@@ -156,7 +211,7 @@ class VCenterClient:
         metrics: Optional[list[str]] = None,
         rsrcs: Optional[list[str]] = None,
     ) -> Any:
-        """Get vStats data points. GET /api/vstats/stats/data/dp (Technology Preview)."""
+        """Get vStats/stats data points via REST (SDK may not expose this)."""
         params: dict[str, Any] = {"start": start_sec, "end": end_sec}
         if types:
             params["types"] = types
@@ -167,28 +222,33 @@ class VCenterClient:
         path = "/api/vstats/stats/data/dp"
         try:
             logger.debug("vStats data: GET %s%s params=%s", self.server, path, params)
-            out = self._get(path, params=params)
-            logger.debug("vStats data: response type=%s", type(out).__name__)
-            if isinstance(out, dict):
-                logger.debug("vStats data: keys=%s", list(out.keys()))
-                for k, v in out.items():
-                    if isinstance(v, list):
-                        logger.debug("vStats data: %s len=%d sample=%s", k, len(v), v[:2] if v else None)
-                    else:
-                        logger.debug("vStats data: %s=%s", k, repr(v)[:150])
-            elif isinstance(out, list):
-                logger.debug("vStats data: list len=%d sample=%s", len(out), out[:2] if out else None)
-            return out
+            return self._get(path, params=params)
         except VCenterAPIError as e:
-            logger.debug("vStats data %s failed: %s body=%s", path, e.status_code, (e.response_text or "")[:300])
             if e.status_code in (404, 501, 400):
                 path_alt = "/api/stats/data/dp"
-                logger.debug("vStats data: trying GET %s%s", self.server, path_alt)
-                return self._get(path_alt, params=params)
+                metrics_list = list(dict.fromkeys(metrics)) if metrics else []
+                if len(metrics_list) <= 1:
+                    logger.debug("vStats data: trying GET %s%s", self.server, path_alt)
+                    return self._get(path_alt, params=params)
+                logger.debug("vStats data: trying GET %s%s (one metric per request)", self.server, path_alt)
+                merged: list[Any] = []
+                for one_metric in metrics_list:
+                    single_params = {**params, "metric": one_metric}
+                    try:
+                        out = self._get(path_alt, params=single_params)
+                    except VCenterAPIError as e2:
+                        logger.debug("vStats data metric=%s failed: %s", one_metric, e2.status_code)
+                        continue
+                    part = out if isinstance(out, list) else (out.get("value") or out.get("data") or [])
+                    if isinstance(part, list):
+                        merged.extend(part)
+                    else:
+                        merged.append(part)
+                return merged
             raise
 
     def close(self) -> None:
-        """Release session (optional; DELETE /api/session)."""
+        """Release session (optional)."""
         if self._session is None:
             return
         try:
@@ -196,3 +256,4 @@ class VCenterClient:
         except Exception as e:
             logger.debug("Session delete failed: %s", e)
         self._session = None
+        self._client = None
