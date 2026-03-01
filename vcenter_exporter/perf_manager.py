@@ -159,35 +159,19 @@ def query_performance(
         entities_specs: list[tuple[str, str, Any]] = []
         first_mor_error: Optional[str] = None
 
+        # pyvmomi ManagedObject refs are created as concrete types (HostSystem, VirtualMachine)
+        # with moId; ManagedObjectReference(type, value) is a DataObject and not used this way.
+        # Attach si's stub so the MOR is bound to this connection when serialized for QueryPerf.
         def _make_mor(mo_type: str, mo_id: str) -> Any:
-            """Build ManagedObjectReference; try constructor then attr-based."""
-            err: Optional[Exception] = None
-            try:
-                return vim.ManagedObjectReference(mo_type, mo_id)
-            except Exception as e:
-                err = e
-            try:
-                return vim.ManagedObjectReference(type=mo_type, value=mo_id)
-            except Exception as e:
-                if err is None:
-                    err = e
-            try:
-                mo = vim.ManagedObjectReference()
-                setattr(mo, "type", mo_type)
-                mo.value = mo_id
-                return mo
-            except Exception as e:
-                if err is None:
-                    err = e
-            try:
-                mo = vim.ManagedObjectReference()
-                mo._type = mo_type
-                mo.value = mo_id
-                return mo
-            except Exception as e:
-                if err is None:
-                    err = e
-            raise type(err)(f"{mo_type} {mo_id}: {err!s}") from err
+            if mo_type == "HostSystem":
+                mo = vim.HostSystem(mo_id)
+            elif mo_type == "VirtualMachine":
+                mo = vim.VirtualMachine(mo_id)
+            else:
+                raise ValueError(f"unsupported MOR type: {mo_type}")
+            object.__setattr__(mo, "_stub", si._stub)
+            object.__setattr__(mo, "_serverGuid", getattr(si, "_serverGuid", None))
+            return mo
 
         for hid in host_ids:
             try:
