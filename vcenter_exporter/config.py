@@ -29,6 +29,11 @@ def get_config():
     host = os.environ.get("EXPORTER_HOST", "0.0.0.0").strip()
     port = int(os.environ.get("EXPORTER_PORT", "9680").strip() or "9680")
     scrape_interval = int(os.environ.get("SCRAPE_INTERVAL", "300").strip() or "300")
+    # Logging
+    log_file = os.environ.get("LOG_FILE", "").strip()
+    log_level = os.environ.get("LOG_LEVEL", "INFO").strip().upper()
+    if log_level not in ("DEBUG", "INFO", "WARNING", "ERROR"):
+        log_level = "INFO"
     # Instance label: hostname from server URL
     try:
         parsed = urlparse(server)
@@ -43,5 +48,7 @@ def get_config():
         "exporter_host": host,
         "exporter_port": port,
         "scrape_interval": scrape_interval,
+        "log_file": log_file,
+        "log_level": log_level,
         "vcenter_instance": vcenter_instance,
     }

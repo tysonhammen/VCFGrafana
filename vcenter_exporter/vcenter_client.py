@@ -124,20 +124,29 @@ class VCenterClient:
 
     def get_vstats_metrics(self) -> list[str]:
         """List available vStats metric names. GET /api/vstats/stats/metrics (Technology Preview)."""
+        path = "/api/vstats/stats/metrics"
         try:
-            data = self._get("/api/vstats/stats/metrics")
+            logger.debug("vStats metrics: GET %s%s", self.server, path)
+            data = self._get(path)
         except VCenterAPIError as e:
+            logger.debug("vStats metrics %s failed: %s %s", path, e.status_code, e.response_text[:200] if e.response_text else "")
             if e.status_code in (404, 501, 400):
+                path_alt = "/api/stats/metrics"
                 try:
-                    data = self._get("/api/stats/metrics")
-                except VCenterAPIError:
+                    logger.debug("vStats metrics: trying GET %s%s", self.server, path_alt)
+                    data = self._get(path_alt)
+                except VCenterAPIError as e2:
+                    logger.debug("vStats metrics %s failed: %s", path_alt, e2.status_code)
                     raise e
             else:
                 raise
         out = self._list_response(data)
         if not out:
+            logger.debug("vStats metrics: response type=%s keys=%s", type(data).__name__, list(data.keys()) if isinstance(data, dict) else "n/a")
             return []
-        return [m.get("metric", m) if isinstance(m, dict) else str(m) for m in out]
+        result = [m.get("metric", m) if isinstance(m, dict) else str(m) for m in out]
+        logger.debug("vStats metrics: got %d metrics, sample: %s", len(result), result[:15])
+        return result
 
     def get_vstats_data(
         self,
@@ -155,11 +164,27 @@ class VCenterClient:
             params["metric"] = metrics
         if rsrcs:
             params["rsrcs"] = rsrcs
+        path = "/api/vstats/stats/data/dp"
         try:
-            return self._get("/api/vstats/stats/data/dp", params=params)
+            logger.debug("vStats data: GET %s%s params=%s", self.server, path, params)
+            out = self._get(path, params=params)
+            logger.debug("vStats data: response type=%s", type(out).__name__)
+            if isinstance(out, dict):
+                logger.debug("vStats data: keys=%s", list(out.keys()))
+                for k, v in out.items():
+                    if isinstance(v, list):
+                        logger.debug("vStats data: %s len=%d sample=%s", k, len(v), v[:2] if v else None)
+                    else:
+                        logger.debug("vStats data: %s=%s", k, repr(v)[:150])
+            elif isinstance(out, list):
+                logger.debug("vStats data: list len=%d sample=%s", len(out), out[:2] if out else None)
+            return out
         except VCenterAPIError as e:
+            logger.debug("vStats data %s failed: %s body=%s", path, e.status_code, (e.response_text or "")[:300])
             if e.status_code in (404, 501, 400):
-                return self._get("/api/stats/data/dp", params=params)
+                path_alt = "/api/stats/data/dp"
+                logger.debug("vStats data: trying GET %s%s", self.server, path_alt)
+                return self._get(path_alt, params=params)
             raise
 
     def close(self) -> None:

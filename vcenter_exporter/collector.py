@@ -206,6 +206,7 @@ class VCenterCollector:
 
     def _collect_performance(self):
         """Collect host and VM performance from vStats API (Technology Preview)."""
+        logger.debug("Performance collection: starting")
         end_sec = int(time.time())
         start_sec = end_sec - 300  # last 5 minutes
         host_id_to_name: dict[str, str] = {}
@@ -219,19 +220,25 @@ class VCenterCollector:
                 vid = v.get("vm") or ""
                 if vid:
                     vm_id_to_name[vid] = v.get("name") or vid
+            logger.debug("Performance collection: host map len=%d vm map len=%d", len(host_id_to_name), len(vm_id_to_name))
         except Exception as e:
-            logger.debug("Could not build resource name maps: %s", e)
+            logger.debug("Could not build resource name maps: %s", e, exc_info=True)
 
         try:
             available = self.client.get_vstats_metrics()
         except VCenterAPIError as e:
-            logger.debug("vStats metrics not available (%s), skipping performance", e.status_code)
+            logger.info("vStats metrics not available (HTTP %s), skipping performance. Set LOG_LEVEL=DEBUG and LOG_FILE for details.", e.status_code)
+            logger.debug("vStats metrics error: %s", e.response_text[:500] if e.response_text else e)
             return
         if not available:
+            logger.debug("vStats metrics: empty list, skipping performance")
             return
         metrics_to_use = [m for m in (VSTATS_METRICS_HOST + VSTATS_METRICS_VM) if m in available]
         if not metrics_to_use:
             metrics_to_use = available[:10]
+            logger.debug("vStats: preferred metrics not in available list, using first 10: %s", metrics_to_use)
+        else:
+            logger.debug("vStats: using metrics %s", metrics_to_use)
         try:
             data = self.client.get_vstats_data(
                 types=["HOST", "VM"],
@@ -240,11 +247,18 @@ class VCenterCollector:
                 metrics=metrics_to_use,
             )
         except VCenterAPIError as e:
-            logger.debug("vStats data not available (%s), skipping performance", e.status_code)
+            logger.info("vStats data not available (HTTP %s), skipping performance. Set LOG_LEVEL=DEBUG and LOG_FILE for details.", e.status_code)
+            logger.debug("vStats data error: %s", e.response_text[:500] if e.response_text else e)
             return
 
         points = self._parse_vstats_data(data)
+        logger.debug("vStats data parsed: %d points", len(points))
         if not points:
+            logger.debug("vStats parse produced no points; raw data type=%s", type(data).__name__)
+            if isinstance(data, dict):
+                logger.debug("vStats raw keys: %s", list(data.keys()))
+            elif isinstance(data, list):
+                logger.debug("vStats raw list len=%d first item keys: %s", len(data), list(data[0].keys()) if data and isinstance(data[0], dict) else "n/a")
             return
 
         gauge = GaugeMetricFamily(
@@ -259,6 +273,7 @@ class VCenterCollector:
                 [self.vcenter_instance, rtype, rid, name, safe_metric],
                 float(value),
             )
+        logger.debug("Performance collection: exposing vcenter_perf_value with %d series", len(points))
         yield gauge
 
     def _parse_vstats_data(self, data: Any) -> list[tuple[str, str, str, float]]:
@@ -266,9 +281,12 @@ class VCenterCollector:
         out: list[tuple[str, str, str, float]] = []
         items = data if isinstance(data, list) else data.get("value", data.get("data", []))
         if not isinstance(items, list):
+            logger.debug("_parse_vstats_data: items not a list (type=%s)", type(items).__name__)
             return out
-        for item in items:
+        logger.debug("_parse_vstats_data: iterating %d items", len(items))
+        for i, item in enumerate(items):
             if not isinstance(item, dict):
+                logger.debug("_parse_vstats_data: item[%d] not dict", i)
                 continue
             rsrc = item.get("rsrc") or item.get("resource") or item.get("resource_id") or ""
             if isinstance(rsrc, dict):
@@ -284,10 +302,14 @@ class VCenterCollector:
                 last = item["values"][-1]
                 value = last.get("value", last.get("v")) if isinstance(last, dict) else last
             if value is None or metric == "":
+                if i < 3:
+                    logger.debug("_parse_vstats_data: item[%d] skip (value=%s metric=%s) keys=%s", i, value, metric, list(item.keys()))
                 continue
             try:
                 vfloat = float(value)
             except (TypeError, ValueError):
+                if i < 3:
+                    logger.debug("_parse_vstats_data: item[%d] value not float: %s", i, type(value).__name__)
                 continue
             if "type.HOST=" in str(rsrc):
                 rtype = "HOST"

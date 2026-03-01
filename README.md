@@ -102,6 +102,8 @@ EXPORTER_PORT=9680
 - **VCENTER_USER** / **VCENTER_PASSWORD** – Credentials that can read inventory (clusters, hosts, datastores, VMs).
 - **VCENTER_VERIFY_SSL** – Set to `false` only if you use a self-signed certificate and accept the security risk.
 - **EXPORTER_HOST** / **EXPORTER_PORT** – Bind address and port for the metrics HTTP server (default `0.0.0.0:9680`).
+- **LOG_FILE** – Optional. If set, all logs are also written to this file (e.g. `/var/log/vcenter-exporter.log`).
+- **LOG_LEVEL** – Optional. Set to `DEBUG` to troubleshoot performance/vStats (e.g. why `vcenter_perf_value` is missing). Default `INFO`.
 
 ### 3. Run the exporter
 

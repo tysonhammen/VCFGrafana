@@ -17,20 +17,41 @@ from .vcenter_client import VCenterClient
 from .collector import VCenterCollector
 from prometheus_client import REGISTRY
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    stream=sys.stdout,
-)
-logger = logging.getLogger(__name__)
+
+def setup_logging(config: dict) -> None:
+    """Configure logging: console and optional log file at level from config."""
+    log_level = getattr(logging, config.get("log_level", "INFO"), logging.INFO)
+    log_file = config.get("log_file", "").strip()
+    fmt = "%(asctime)s %(levelname)s %(name)s %(message)s"
+    root = logging.getLogger()
+    root.setLevel(log_level)
+    for h in root.handlers[:]:
+        root.removeHandler(h)
+    console = logging.StreamHandler(sys.stdout)
+    console.setLevel(log_level)
+    console.setFormatter(logging.Formatter(fmt))
+    root.addHandler(console)
+    if log_file:
+        try:
+            fh = logging.FileHandler(log_file, encoding="utf-8")
+            fh.setLevel(log_level)
+            fh.setFormatter(logging.Formatter(fmt))
+            root.addHandler(fh)
+            logging.getLogger("vcenter_exporter").info("Logging to file: %s", log_file)
+        except OSError as e:
+            logging.getLogger("vcenter_exporter").warning("Could not open log file %s: %s", log_file, e)
 
 
 def main() -> None:
     try:
         config = get_config()
     except ValueError as e:
-        logger.error("Configuration error: %s", e)
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+        logging.getLogger(__name__).error("Configuration error: %s", e)
         sys.exit(1)
+
+    setup_logging(config)
+    logger = logging.getLogger(__name__)
 
     client = VCenterClient(
         server=config["vcenter_server"],
