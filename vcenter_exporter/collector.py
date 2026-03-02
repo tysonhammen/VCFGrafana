@@ -431,19 +431,23 @@ class VCenterCollector:
             points, host_id_to_name, vm_id_to_name = cache
             if not points:
                 return
+            # Dedupe by (rtype, rid, metric) so we never send same labels twice (Prometheus drops duplicates)
+            by_key: dict[tuple[str, str, str], float] = {}
+            for (rtype, rid, metric_name, value) in points:
+                safe_metric = metric_name.replace(".", "_").replace("-", "_")
+                by_key[(rtype, rid, safe_metric)] = float(value)
             gauge = GaugeMetricFamily(
                 "vcenter_perf_value",
                 "vCenter performance metric (stats API or PerformanceManager fallback; latest value)",
                 labels=["vcenter", "resource_type", "resource_id", "resource_name", "metric"],
             )
-            for (rtype, rid, metric_name, value) in points:
+            for (rtype, rid, safe_metric), value in by_key.items():
                 name = host_id_to_name.get(rid) or vm_id_to_name.get(rid) or rid
-                safe_metric = metric_name.replace(".", "_").replace("-", "_")
                 gauge.add_metric(
                     [self.vcenter_instance, rtype, rid, name, safe_metric],
-                    float(value),
+                    value,
                 )
-            logger.debug("Performance collection: serving vcenter_perf_value from cache (%d series)", len(points))
+            logger.debug("Performance collection: serving vcenter_perf_value from cache (%d series)", len(by_key))
             yield gauge
             return
 
@@ -500,19 +504,23 @@ class VCenterCollector:
         if not points:
             return
 
+        # Dedupe by (rtype, rid, metric) so we never send same labels twice (Prometheus drops duplicates)
+        by_key: dict[tuple[str, str, str], float] = {}
+        for (rtype, rid, metric_name, value) in points:
+            safe_metric = metric_name.replace(".", "_").replace("-", "_")
+            by_key[(rtype, rid, safe_metric)] = float(value)
         gauge = GaugeMetricFamily(
             "vcenter_perf_value",
             "vCenter performance metric (stats API or PerformanceManager fallback; latest value)",
             labels=["vcenter", "resource_type", "resource_id", "resource_name", "metric"],
         )
-        for (rtype, rid, metric_name, value) in points:
+        for (rtype, rid, safe_metric), value in by_key.items():
             name = host_id_to_name.get(rid) or vm_id_to_name.get(rid) or rid
-            safe_metric = metric_name.replace(".", "_").replace("-", "_")
             gauge.add_metric(
                 [self.vcenter_instance, rtype, rid, name, safe_metric],
-                float(value),
+                value,
             )
-        logger.debug("Performance collection: exposing vcenter_perf_value with %d series", len(points))
+        logger.debug("Performance collection: exposing vcenter_perf_value with %d series", len(by_key))
         yield gauge
 
     def _parse_vstats_data(self, data: Any) -> list[tuple[str, str, str, float]]:
