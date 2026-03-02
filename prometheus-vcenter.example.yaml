@@ -4,6 +4,9 @@
 # The 'app' label is applied to all metrics from this target so you can
 # filter in Grafana when you have multiple exporters or jobs.
 #
+# If scrapes time out, increase scrape_timeout and/or set VCENTER_COLLECT_PERF=false
+# or VCENTER_PERF_TIMEOUT_SEC / VCENTER_PERF_MAX_HOSTS / VCENTER_PERF_MAX_VMS (see README).
+#
 scrape_configs:
   - job_name: 'vcenter'
     static_configs:
@@ -12,3 +15,4 @@ scrape_configs:
           app: "vCenter"
     metrics_path: /metrics
     scrape_interval: 5m
+    scrape_timeout: 60s

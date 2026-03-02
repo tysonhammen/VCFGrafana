@@ -40,6 +40,26 @@ def get_config():
         vcenter_instance = parsed.hostname or "default"
     except Exception:
         vcenter_instance = "default"
+    # Performance collection (can cause long scrapes / timeouts)
+    collect_perf = _bool(os.environ.get("VCENTER_COLLECT_PERF", "true"))
+    try:
+        perf_timeout_sec = int(os.environ.get("VCENTER_PERF_TIMEOUT_SEC", "0").strip() or "0")
+    except ValueError:
+        perf_timeout_sec = 0
+    try:
+        perf_max_hosts = int(os.environ.get("VCENTER_PERF_MAX_HOSTS", "0").strip() or "0")
+    except ValueError:
+        perf_max_hosts = 0
+    try:
+        perf_max_vms = int(os.environ.get("VCENTER_PERF_MAX_VMS", "0").strip() or "0")
+    except ValueError:
+        perf_max_vms = 0
+    # Async perf: collect in background thread, serve from cache (avoids scrape timeout)
+    perf_async = _bool(os.environ.get("VCENTER_PERF_ASYNC", "false"))
+    try:
+        perf_interval_sec = int(os.environ.get("VCENTER_PERF_INTERVAL_SEC", "300").strip() or "300")
+    except ValueError:
+        perf_interval_sec = 300
     return {
         "vcenter_server": server,
         "vcenter_user": user,
@@ -51,4 +71,10 @@ def get_config():
         "log_file": log_file,
         "log_level": log_level,
         "vcenter_instance": vcenter_instance,
+        "collect_perf": collect_perf,
+        "perf_timeout_sec": max(0, perf_timeout_sec),
+        "perf_max_hosts": max(0, perf_max_hosts),
+        "perf_max_vms": max(0, perf_max_vms),
+        "perf_async": perf_async,
+        "perf_interval_sec": max(10, perf_interval_sec),
     }

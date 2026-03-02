@@ -68,7 +68,16 @@ def main() -> None:
         password=config["vcenter_password"],
         verify_ssl=config["vcenter_verify_ssl"],
     )
-    collector = VCenterCollector(client, vcenter_instance=config["vcenter_instance"])
+    collector = VCenterCollector(
+        client,
+        vcenter_instance=config["vcenter_instance"],
+        collect_perf=config["collect_perf"],
+        perf_timeout_sec=config["perf_timeout_sec"],
+        perf_max_hosts=config["perf_max_hosts"],
+        perf_max_vms=config["perf_max_vms"],
+        perf_async=config["perf_async"],
+        perf_interval_sec=config["perf_interval_sec"],
+    )
     REGISTRY.register(collector)
 
     host = config["exporter_host"]

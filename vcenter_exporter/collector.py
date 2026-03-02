@@ -13,6 +13,8 @@ import logging
 import os
 import sys
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any, Optional
 
 from prometheus_client.core import GaugeMetricFamily, REGISTRY
@@ -25,6 +27,14 @@ logger = logging.getLogger(__name__)
 # vStats metric names to collect (subset; API may return different names)
 VSTATS_METRICS_HOST = ["cpu.usage", "mem.usage", "cpu.util"]
 VSTATS_METRICS_VM = ["cpu.usage", "mem.usage", "cpu.util"]
+
+# Max entities per background worker when perf_async (batching)
+PERF_BATCH_SIZE = 50
+
+
+def _chunk(lst: list, size: int) -> list:
+    """Split list into chunks of at most size."""
+    return [lst[i : i + size] for i in range(0, len(lst), size)]
 
 
 def _log_perf_failure(step: str, e: "VCenterAPIError") -> None:
@@ -59,9 +69,37 @@ class VCenterCollector:
     clusters, hosts, datastores, and VMs as metrics.
     """
 
-    def __init__(self, client: VCenterClient, vcenter_instance: str = ""):
+    def __init__(
+        self,
+        client: VCenterClient,
+        vcenter_instance: str = "",
+        collect_perf: bool = True,
+        perf_timeout_sec: int = 0,
+        perf_max_hosts: int = 0,
+        perf_max_vms: int = 0,
+        perf_async: bool = False,
+        perf_interval_sec: int = 300,
+    ):
         self.client = client
         self.vcenter_instance = vcenter_instance or "default"
+        self.collect_perf = collect_perf
+        self.perf_timeout_sec = perf_timeout_sec
+        self.perf_max_hosts = perf_max_hosts
+        self.perf_max_vms = perf_max_vms
+        self.perf_async = perf_async
+        self.perf_interval_sec = max(10, perf_interval_sec)
+        self._perf_cache: Optional[tuple[list[tuple[str, str, str, float]], dict[str, str], dict[str, str]]] = None
+        self._perf_lock = threading.Lock()
+        self._perf_stop = threading.Event()
+        if collect_perf and perf_async:
+            self._perf_thread = threading.Thread(target=self._perf_background_loop, daemon=True)
+            self._perf_thread.start()
+            logger.info(
+                "Performance collection running in background (interval=%ds); scrapes will serve cached perf.",
+                self.perf_interval_sec,
+            )
+        else:
+            self._perf_thread = None
 
     def collect(self):
         """Yield Prometheus metrics from vCenter."""
@@ -233,26 +271,16 @@ class VCenterCollector:
         yield vm_memory_mib
         yield vm_count
 
-    def _collect_performance(self):
-        """Collect host and VM performance from stats API, with PerformanceManager fallback when REST fails or returns no data."""
-        logger.debug("Performance collection: starting")
+    def _gather_perf_points(
+        self,
+        host_ids: list[str],
+        vm_ids: list[str],
+        host_id_to_name: dict[str, str],
+        vm_id_to_name: dict[str, str],
+    ) -> list[tuple[str, str, str, float]]:
+        """Run vStats then PerformanceManager fallback; return list of (rtype, rid, metric_name, value)."""
         end_sec = int(time.time())
-        start_sec = end_sec - 300  # last 5 minutes
-        host_id_to_name: dict[str, str] = {}
-        vm_id_to_name: dict[str, str] = {}
-        try:
-            for h in self.client.list_hosts():
-                hid = h.get("host") or ""
-                if hid:
-                    host_id_to_name[hid] = h.get("name") or hid
-            for v in self.client.list_vms():
-                vid = v.get("vm") or ""
-                if vid:
-                    vm_id_to_name[vid] = v.get("name") or vid
-            logger.debug("Performance collection: host map len=%d vm map len=%d", len(host_id_to_name), len(vm_id_to_name))
-        except Exception as e:
-            logger.debug("Could not build resource name maps: %s", e, exc_info=True)
-
+        start_sec = end_sec - 300
         points: list[tuple[str, str, str, float]] = []
         try:
             available = self.client.get_vstats_metrics()
@@ -268,7 +296,7 @@ class VCenterCollector:
                     logger.debug("vStats: preferred metrics not in available list, using first 10: %s", metrics_to_use)
                 else:
                     logger.debug("vStats: using metrics %s", metrics_to_use)
-                rsrcs = [f"type.HOST={hid}" for hid in host_id_to_name] + [f"type.VM={vid}" for vid in vm_id_to_name]
+                rsrcs = [f"type.HOST={hid}" for hid in host_ids] + [f"type.VM={vid}" for vid in vm_ids]
                 data: Any = None
                 try:
                     data = self.client.get_vstats_data(
@@ -288,7 +316,7 @@ class VCenterCollector:
                     else:
                         logger.debug("vStats parse produced no points; raw data type=%s", type(data).__name__)
 
-        if not points and (host_id_to_name or vm_id_to_name):
+        if not points and (host_ids or vm_ids):
             logger.debug("Trying PerformanceManager fallback (pyvmomi) for host/VM metrics")
             try:
                 fallback = perf_manager.query_performance(
@@ -296,8 +324,8 @@ class VCenterCollector:
                     user=self.client.user,
                     password=self.client.password,
                     verify_ssl=self.client.verify_ssl,
-                    host_ids=list(host_id_to_name.keys()),
-                    vm_ids=list(vm_id_to_name.keys()),
+                    host_ids=host_ids,
+                    vm_ids=vm_ids,
                     host_id_to_name=host_id_to_name,
                     vm_id_to_name=vm_id_to_name,
                 )
@@ -325,6 +353,149 @@ class VCenterCollector:
                         )
             except Exception as e:
                 logger.debug("PerformanceManager fallback failed: %s", e, exc_info=True)
+        return points
+
+    def _perf_background_loop(self) -> None:
+        """Daemon loop: refresh perf cache every perf_interval_sec. Batches entities into PERF_BATCH_SIZE per thread."""
+        # Short delay so first scrape can return quickly with inventory only
+        self._perf_stop.wait(timeout=min(5, self.perf_interval_sec))
+        if self._perf_stop.is_set():
+            return
+        while not self._perf_stop.is_set():
+            host_id_to_name = {}
+            vm_id_to_name = {}
+            try:
+                for h in self.client.list_hosts():
+                    hid = h.get("host") or ""
+                    if hid:
+                        host_id_to_name[hid] = h.get("name") or hid
+                for v in self.client.list_vms():
+                    vid = v.get("vm") or ""
+                    if vid:
+                        vm_id_to_name[vid] = v.get("name") or vid
+            except Exception as e:
+                logger.debug("Background perf: could not build name maps: %s", e)
+            host_ids = list(host_id_to_name.keys())
+            vm_ids = list(vm_id_to_name.keys())
+            if self.perf_max_hosts > 0 and len(host_ids) > self.perf_max_hosts:
+                host_ids = host_ids[: self.perf_max_hosts]
+            if self.perf_max_vms > 0 and len(vm_ids) > self.perf_max_vms:
+                vm_ids = vm_ids[: self.perf_max_vms]
+            # Batch: at most PERF_BATCH_SIZE entities per worker
+            batches: list[tuple[list[str], list[str]]] = []
+            for h_chunk in _chunk(host_ids, PERF_BATCH_SIZE):
+                batches.append((h_chunk, []))
+            for v_chunk in _chunk(vm_ids, PERF_BATCH_SIZE):
+                batches.append(([], v_chunk))
+            if not batches:
+                with self._perf_lock:
+                    self._perf_cache = ([], dict(host_id_to_name), dict(vm_id_to_name))
+            else:
+                all_points: list[tuple[str, str, str, float]] = []
+                max_workers = min(len(batches), 32)
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = [
+                        executor.submit(
+                            self._gather_perf_points,
+                            h_batch,
+                            v_batch,
+                            host_id_to_name,
+                            vm_id_to_name,
+                        )
+                        for (h_batch, v_batch) in batches
+                    ]
+                    for future in futures:
+                        try:
+                            points = future.result()
+                            all_points.extend(points)
+                        except Exception as e:
+                            logger.debug("Background perf batch failed: %s", e)
+                with self._perf_lock:
+                    self._perf_cache = (all_points, dict(host_id_to_name), dict(vm_id_to_name))
+                if all_points:
+                    logger.debug("Background perf: cached %d points from %d batches", len(all_points), len(batches))
+            self._perf_stop.wait(timeout=self.perf_interval_sec)
+
+    def _collect_performance(self):
+        """Collect host and VM performance from stats API, with PerformanceManager fallback when REST fails or returns no data."""
+        if not self.collect_perf:
+            logger.debug("Performance collection disabled (VCENTER_COLLECT_PERF=0)")
+            return
+
+        # Async mode: serve from background cache; scrape returns immediately
+        if self.perf_async:
+            with self._perf_lock:
+                cache = self._perf_cache
+            if cache is None:
+                return
+            points, host_id_to_name, vm_id_to_name = cache
+            if not points:
+                return
+            gauge = GaugeMetricFamily(
+                "vcenter_perf_value",
+                "vCenter performance metric (stats API or PerformanceManager fallback; latest value)",
+                labels=["vcenter", "resource_type", "resource_id", "resource_name", "metric"],
+            )
+            for (rtype, rid, metric_name, value) in points:
+                name = host_id_to_name.get(rid) or vm_id_to_name.get(rid) or rid
+                safe_metric = metric_name.replace(".", "_").replace("-", "_")
+                gauge.add_metric(
+                    [self.vcenter_instance, rtype, rid, name, safe_metric],
+                    float(value),
+                )
+            logger.debug("Performance collection: serving vcenter_perf_value from cache (%d series)", len(points))
+            yield gauge
+            return
+
+        # Sync mode: gather during scrape (with optional timeout)
+        logger.debug("Performance collection: starting (sync)")
+        host_id_to_name = {}
+        vm_id_to_name = {}
+        try:
+            for h in self.client.list_hosts():
+                hid = h.get("host") or ""
+                if hid:
+                    host_id_to_name[hid] = h.get("name") or hid
+            for v in self.client.list_vms():
+                vid = v.get("vm") or ""
+                if vid:
+                    vm_id_to_name[vid] = v.get("name") or vid
+            logger.debug("Performance collection: host map len=%d vm map len=%d", len(host_id_to_name), len(vm_id_to_name))
+        except Exception as e:
+            logger.debug("Could not build resource name maps: %s", e, exc_info=True)
+
+        host_ids = list(host_id_to_name.keys())
+        vm_ids = list(vm_id_to_name.keys())
+        if self.perf_max_hosts > 0 and len(host_ids) > self.perf_max_hosts:
+            host_ids = host_ids[: self.perf_max_hosts]
+            logger.debug("Capped host list to %d (VCENTER_PERF_MAX_HOSTS)", len(host_ids))
+        if self.perf_max_vms > 0 and len(vm_ids) > self.perf_max_vms:
+            vm_ids = vm_ids[: self.perf_max_vms]
+            logger.debug("Capped VM list to %d (VCENTER_PERF_MAX_VMS)", len(vm_ids))
+
+        if self.perf_timeout_sec > 0:
+            try:
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(
+                        self._gather_perf_points,
+                        host_ids,
+                        vm_ids,
+                        host_id_to_name,
+                        vm_id_to_name,
+                    )
+                    points = future.result(timeout=self.perf_timeout_sec)
+            except FuturesTimeoutError:
+                logger.warning(
+                    "Performance collection timed out after %ds (VCENTER_PERF_TIMEOUT_SEC); skipping perf metrics. "
+                    "Increase timeout or set VCENTER_PERF_MAX_HOSTS/VCENTER_PERF_MAX_VMS to reduce scope.",
+                    self.perf_timeout_sec,
+                )
+                return
+            except Exception as e:
+                logger.debug("Performance collection error: %s", e, exc_info=True)
+                return
+        else:
+            points = self._gather_perf_points(host_ids, vm_ids, host_id_to_name, vm_id_to_name)
 
         if not points:
             return

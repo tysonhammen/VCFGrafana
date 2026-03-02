@@ -82,6 +82,14 @@ EXPORTER_PORT=9680
 # Optional: log to file and set level (DEBUG for performance/stats API troubleshooting)
 # LOG_FILE=/var/log/vcenter-exporter.log
 # LOG_LEVEL=DEBUG
+#
+# Performance collection (can cause long scrapes / Prometheus timeout):
+# VCENTER_COLLECT_PERF=true     # set to false or 0 to disable host/VM perf (inventory only)
+# VCENTER_PERF_TIMEOUT_SEC=0    # stop perf collection after N seconds (0 = no limit)
+# VCENTER_PERF_MAX_HOSTS=0      # cap hosts queried for perf (0 = no limit)
+# VCENTER_PERF_MAX_VMS=0        # cap VMs queried for perf (0 = no limit)
+# VCENTER_PERF_ASYNC=true      # collect perf in background, serve from cache (avoids scrape timeout)
+# VCENTER_PERF_INTERVAL_SEC=300 # when async, refresh cache every N seconds
 ```
 
 - **VCENTER_SERVER** – vCenter URL (with `https://`).
@@ -134,7 +142,47 @@ scrape_configs:
 
 Replace the target host/port if needed. The `app` label is used by the Grafana dashboards to filter metrics.
 
+**If scrapes time out** (no data, or Prometheus logs "context deadline exceeded"), performance collection may be taking too long. Either increase the scrape timeout for this job or reduce/disable performance collection (see [Performance collection and scrape timeouts](#performance-collection-and-scrape-timeouts) below).
+
 Reload or restart Prometheus so it scrapes the new target.
+
+### Performance collection and scrape timeouts
+
+Host/VM performance (vStats or PerformanceManager fallback) can take a long time when there are many hosts and VMs, which may cause Prometheus to time out the scrape (default is often 10s). Options:
+
+| Option | Description |
+|--------|-------------|
+| **Increase scrape timeout** | In `prometheus.yml`, set `scrape_timeout: 60s` (or higher) for the vcenter job so the exporter has time to finish. |
+| **Disable performance** | Set `VCENTER_COLLECT_PERF=false` (or `0`) in the exporter's environment. The exporter will return only inventory metrics (clusters, hosts, datastores, VMs) and the scrape stays fast. Host/VM performance dashboards will have no data. |
+| **Timeout perf and keep inventory** | Set `VCENTER_PERF_TIMEOUT_SEC=30` (or another value). Performance collection runs in a background thread; if it does not finish within that many seconds, it is abandoned and the scrape returns with inventory only. Avoids a full scrape timeout while still attempting perf. |
+| **Limit scope** | Set `VCENTER_PERF_MAX_HOSTS=50` and/or `VCENTER_PERF_MAX_VMS=200` to cap how many entities are queried for performance. Reduces work and scrape time. |
+| **Thread perf separately** | Set `VCENTER_PERF_ASYNC=true`. Performance is collected in a **background thread** on an interval (e.g. every 5 minutes). Each scrape returns **inventory immediately** and **cached performance** from the last run. Scrapes stay fast and never wait on perf. Set `VCENTER_PERF_INTERVAL_SEC=300` (default) to match your scrape interval. |
+
+Example: disable performance so scrapes always succeed, then increase timeout later if you want perf:
+
+```env
+VCENTER_COLLECT_PERF=false
+```
+
+Example: run performance in a background thread so scrapes never wait (recommended if you had timeouts):
+
+```env
+VCENTER_PERF_ASYNC=true
+VCENTER_PERF_INTERVAL_SEC=300
+```
+
+Example Prometheus config with a longer timeout:
+
+```yaml
+  - job_name: 'vcenter'
+    scrape_interval: 5m
+    scrape_timeout: 60s
+    static_configs:
+      - targets: ['srv-vcexp-01:9680']
+        labels:
+          app: "vCenter"
+    metrics_path: /metrics
+```
 
 ## Exposed metrics
 
