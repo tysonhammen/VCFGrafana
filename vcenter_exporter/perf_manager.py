@@ -75,6 +75,9 @@ def _metric_types_from_names(names: list[str]) -> list[str]:
         if part:
             groups.add(part)
     return sorted(groups)
+
+
+def _build_counter_map(perf_manager: Any) -> dict[str, int]:
     """Build full_name -> counterId from perfManager.perfCounter (same as vm_perf_example.py)."""
     counter_info: dict[str, int] = {}
     for counter in getattr(perf_manager, "perfCounter", []) or []:
