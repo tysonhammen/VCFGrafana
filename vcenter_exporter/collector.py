@@ -39,8 +39,9 @@ def _chunk(lst: list, size: int) -> list:
 
 def _normalize_percent_value(metric_name: str, value: float) -> float:
     """Normalize percent-like metrics to 0-100 for consistent dashboard display.
-    Handles vSphere returning 0-1 or values > 100 (e.g. raw or wrong unit).
-    Excludes cpu.usagemhz (MHz) and other non-percent metrics.
+    - vSphere PerformanceManager returns percent counters in hundredths (e.g. 281 = 2.81%); divide by 100 when value > 100.
+    - Handles 0-1 scale (e.g. 0.0281 → 2.81).
+    - Excludes cpu.usagemhz (MHz) and other non-percent metrics.
     """
     try:
         v = float(value)
@@ -52,6 +53,9 @@ def _normalize_percent_value(metric_name: str, value: float) -> float:
         return v
     if "usage" not in m and "util" not in m:
         return v
+    # PerformanceManager (pyvmomi) returns percent in hundredths: 281 → 2.81%, 10000 → 100%
+    if v > 100:
+        v = v / 100.0
     if v > 100:
         return 100.0  # cap at 100
     if 0 < v <= 1:
