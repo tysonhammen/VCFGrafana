@@ -15,9 +15,11 @@ Pre-built Grafana dashboards show **clusters**, **hosts**, **storage**, **VMs**,
 | **vCenter Clusters** | Table of all clusters (filter by vCenter). Top links to other dashboards. |
 | **vCenter Hosts**     | Table of all hosts with connection state and power state; filter by vCenter and cluster. **Click a host name** to open Host Performance for that host. Connection/power cells are color-coded. |
 | **vCenter Host Performance** | CPU and memory time series and gauges for ESXi hosts. **Click a series name (legend) or a host in the table** to view that host only. Top links to other dashboards. |
+| **vCenter Host Metrics (all)** | **Pick one host** from the dropdown; view **all** collected metrics for that host in a table (latest values) and over time. Use for full metric discovery. |
 | **vCenter Storage**  | Datastore free %, capacity, and free space; filter by vCenter and datastore name. |
 | **vCenter VMs**      | Table of all VMs with power state, guest OS, cluster, host. **Click a VM name** to open VM Performance for that VM. Filter by vCenter, cluster, and power state. Power cells are color-coded. |
 | **vCenter VM Performance** | CPU and memory time series and gauges for VMs. **Click a series name (legend) or a VM in the table** to view that VM only. Top links to other dashboards. |
+| **vCenter VM Metrics (all)** | **Pick one VM** from the dropdown; view **all** collected metrics for that VM in a table (latest values) and over time. Use for full metric discovery. |
 | **vCenter vSAN Health**    | vSAN cluster health score and per-host status (green/yellow/red). **Click a host name** to open Host Performance for that host. Top links to other dashboards. |
 
 ## Import in Grafana

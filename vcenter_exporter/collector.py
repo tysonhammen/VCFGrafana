@@ -350,12 +350,9 @@ class VCenterCollector:
                     len(available),
                 )
                 logger.debug("vStats: all metric names: %s", sorted(available))
-                metrics_to_use = list(dict.fromkeys(m for m in (VSTATS_METRICS_HOST + VSTATS_METRICS_VM) if m in available))
-                if not metrics_to_use:
-                    metrics_to_use = available[:10]
-                    logger.debug("vStats: preferred metrics not in available list, using first 10: %s", metrics_to_use)
-                else:
-                    logger.debug("vStats: using metrics %s", metrics_to_use)
+                # Use all available metrics (identified in logs) for host/VM data request
+                metrics_to_use = list(dict.fromkeys(available))
+                logger.info("vStats: requesting data for all %d metrics", len(metrics_to_use))
                 rsrcs = [f"type.HOST={hid}" for hid in host_ids] + [f"type.VM={vid}" for vid in vm_ids]
                 data: Any = None
                 try:

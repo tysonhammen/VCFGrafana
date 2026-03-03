@@ -32,15 +32,8 @@ except ImportError:
     pyVmomi = None  # type: ignore
 
 
-# Counter name patterns we want (group.name.rollupType); match perfCounter keys (e.g. cpu.usagemhz.LATEST, cpu.usage.average).
-PERF_COUNTER_PATTERNS = [
-    "cpu.usagemhz.average",
-    "cpu.usage.average",
-    "mem.usage.average",
-    "cpu.usagemhz.latest",
-    "cpu.usage.latest",
-    "mem.usage.latest",
-]
+# Max performance counters to query per entity when collecting all (avoids timeouts)
+PERF_MAX_COUNTERS_PER_ENTITY = 200
 
 
 def _parse_server_host(server: str) -> tuple[str, int]:
@@ -94,28 +87,16 @@ def _build_counter_map(perf_manager: Any) -> dict[str, int]:
 
 
 def _metric_ids_for_entity(perf_manager: Any, counter_map: dict[str, int], entity: Any) -> list[Any]:
-    """Build MetricId list for entity (QueryAvailablePerfMetric then filter to wanted counter IDs)."""
+    """Build MetricId list for entity. Uses all available counters from QueryAvailablePerfMetric (up to PERF_MAX_COUNTERS_PER_ENTITY)."""
     if not HAS_PYVMOMI or pyVmomi is None:
         return []
     vim = pyVmomi.vim
     available = perf_manager.QueryAvailablePerfMetric(entity=entity)
     if not available:
         return []
-    patterns_lower = [p.lower() for p in PERF_COUNTER_PATTERNS]
-    wanted = set()
-    for full_name, cid in counter_map.items():
-        if full_name.lower() in patterns_lower or any(p in full_name.lower() for p in ("cpu.usage", "mem.usage")):
-            wanted.add(cid)
     metric_ids = []
-    for m in available:
-        cid = m.counterId
-        if cid in wanted or not wanted:
-            metric_ids.append(vim.PerformanceManager.MetricId(counterId=cid, instance="*"))
-            if wanted and len(metric_ids) >= 20:
-                break
-    if not metric_ids and available:
-        for m in available[:10]:
-            metric_ids.append(vim.PerformanceManager.MetricId(counterId=m.counterId, instance="*"))
+    for m in available[:PERF_MAX_COUNTERS_PER_ENTITY]:
+        metric_ids.append(vim.PerformanceManager.MetricId(counterId=m.counterId, instance="*"))
     return metric_ids
 
 

@@ -11,6 +11,7 @@
     { "title": "Host Performance", "url": "/d/vcenter-host-performance", "type": "dashboard", "asDropdown": false },
     { "title": "VMs", "url": "/d/vcenter-vms", "type": "dashboard", "asDropdown": false },
     { "title": "VM Performance", "url": "/d/vcenter-vm-performance", "type": "dashboard", "asDropdown": false },
+    { "title": "VM Metrics (all)", "url": "/d/vcenter-vm-metrics", "type": "dashboard", "asDropdown": false },
     { "title": "Storage", "url": "/d/vcenter-storage", "type": "dashboard", "asDropdown": false },
     { "title": "vSAN Health", "url": "/d/vcenter-vsan", "type": "dashboard", "asDropdown": false }
   ],
