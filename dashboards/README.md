@@ -11,14 +11,14 @@ Pre-built Grafana dashboards show **clusters**, **hosts**, **storage**, **VMs**,
 
 | Dashboard        | Description |
 |------------------|-------------|
-| **vCenter Overview** | Summary: total clusters, hosts, VMs, datastores; exporter health; tables for clusters, hosts by connection state, VMs by power state, total storage free %. Links to Host/VM Performance. |
-| **vCenter Clusters** | Table of all clusters (filter by vCenter). |
-| **vCenter Hosts**     | Table of all hosts with connection state and power state; filter by vCenter and cluster. Connection/power cells are color-coded. |
-| **vCenter Host Performance** | CPU and memory time series and gauges for ESXi hosts (requires vStats metrics; see below). |
+| **vCenter Overview** | Summary: total clusters, hosts, VMs, datastores; exporter health; tables for clusters, hosts by connection state, VMs by power state, total storage free %. Links to all other dashboards. |
+| **vCenter Clusters** | Table of all clusters (filter by vCenter). Top links to other dashboards. |
+| **vCenter Hosts**     | Table of all hosts with connection state and power state; filter by vCenter and cluster. **Click a host name** to open Host Performance for that host. Connection/power cells are color-coded. |
+| **vCenter Host Performance** | CPU and memory time series and gauges for ESXi hosts. **Click a series name (legend) or a host in the table** to view that host only. Top links to other dashboards. |
 | **vCenter Storage**  | Datastore free %, capacity, and free space; filter by vCenter and datastore name. |
-| **vCenter VMs**      | Table of all VMs with power state, guest OS, cluster, host; filter by vCenter, cluster, and power state. Power cells are color-coded. |
-| **vCenter VM Performance** | CPU and memory time series and gauges for VMs (requires vStats metrics; see below). |
-| **vCenter vSAN Health**    | vSAN cluster health score and per-host status (green/yellow/red); requires vSAN and pyvmomi (see main README). |
+| **vCenter VMs**      | Table of all VMs with power state, guest OS, cluster, host. **Click a VM name** to open VM Performance for that VM. Filter by vCenter, cluster, and power state. Power cells are color-coded. |
+| **vCenter VM Performance** | CPU and memory time series and gauges for VMs. **Click a series name (legend) or a VM in the table** to view that VM only. Top links to other dashboards. |
+| **vCenter vSAN Health**    | vSAN cluster health score and per-host status (green/yellow/red). **Click a host name** to open Host Performance for that host. Top links to other dashboards. |
 
 ## Import in Grafana
 
@@ -40,6 +40,11 @@ Each dashboard defines:
 - **Power state** (VMs) – Filter by POWERED_ON, POWERED_OFF, etc.
 
 All variables support “All” so the view stays dynamic when you have multiple vCenters or clusters.
+
+## Drill-down and dashboard links
+
+- **Top bar:** Every dashboard includes links (Overview, Clusters, Hosts, Host Performance, VMs, VM Performance, Storage, vSAN Health) so you can jump between dashboards without using the menu.
+- **Click a host or VM name:** On **vCenter Hosts**, **vCenter VMs**, **vCenter Host Performance**, **vCenter VM Performance**, and **vCenter vSAN Health**, clicking a host or VM name (in tables or in chart legends) opens the performance dashboard filtered to that asset so you see full metrics for that host or VM.
 
 ## Performance metrics (vStats)
 

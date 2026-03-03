@@ -4,7 +4,16 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    { "title": "Overview", "url": "/d/vcenter-overview", "type": "dashboard", "asDropdown": true },
+    { "title": "Clusters", "url": "/d/vcenter-clusters", "type": "dashboard", "asDropdown": false },
+    { "title": "Hosts", "url": "/d/vcenter-hosts", "type": "dashboard", "asDropdown": false },
+    { "title": "Host Performance", "url": "/d/vcenter-host-performance", "type": "dashboard", "asDropdown": false },
+    { "title": "VMs", "url": "/d/vcenter-vms", "type": "dashboard", "asDropdown": false },
+    { "title": "VM Performance", "url": "/d/vcenter-vm-performance", "type": "dashboard", "asDropdown": false },
+    { "title": "Storage", "url": "/d/vcenter-storage", "type": "dashboard", "asDropdown": false },
+    { "title": "vSAN Health", "url": "/d/vcenter-vsan", "type": "dashboard", "asDropdown": false }
+  ],
   "liveNow": false,
   "panels": [
     {
@@ -131,7 +140,8 @@
           ]
         },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "custom.cellOptions", "value": { "type": "color-background" } }] }
+          { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "custom.cellOptions", "value": { "type": "color-background" } }] },
+          { "matcher": { "id": "byName", "options": "Host" }, "properties": [{ "id": "links", "value": [{ "title": "View host performance", "url": "/d/vcenter-host-performance?var-host=${__value.raw}" }] }] }
         ]
       },
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 18 },

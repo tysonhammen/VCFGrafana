@@ -4,7 +4,16 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    { "title": "Overview", "url": "/d/vcenter-overview", "type": "dashboard", "asDropdown": true },
+    { "title": "Clusters", "url": "/d/vcenter-clusters", "type": "dashboard", "asDropdown": false },
+    { "title": "Hosts", "url": "/d/vcenter-hosts", "type": "dashboard", "asDropdown": false },
+    { "title": "Host Performance", "url": "/d/vcenter-host-performance", "type": "dashboard", "asDropdown": false },
+    { "title": "VMs", "url": "/d/vcenter-vms", "type": "dashboard", "asDropdown": false },
+    { "title": "VM Performance", "url": "/d/vcenter-vm-performance", "type": "dashboard", "asDropdown": false },
+    { "title": "Storage", "url": "/d/vcenter-storage", "type": "dashboard", "asDropdown": false },
+    { "title": "vSAN Health", "url": "/d/vcenter-vsan", "type": "dashboard", "asDropdown": false }
+  ],
   "liveNow": false,
   "panels": [
     {
@@ -17,7 +26,8 @@
           "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
           "unit": "percent",
           "min": 0,
-          "max": 100
+          "max": 100,
+          "links": [{ "title": "View this VM only", "url": "/d/vcenter-vm-performance?var-vm=${__series.name}" }]
         },
         "overrides": []
       },
@@ -43,7 +53,8 @@
           "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
           "unit": "percent",
           "min": 0,
-          "max": 100
+          "max": 100,
+          "links": [{ "title": "View this VM only", "url": "/d/vcenter-vm-performance?var-vm=${__series.name}" }]
         },
         "overrides": []
       },
@@ -124,6 +135,12 @@
         "refId": "A"
       }],
       "title": "All VM performance (latest)",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "VM" }, "properties": [{ "id": "links", "value": [{ "title": "View this VM only", "url": "/d/vcenter-vm-performance?var-vm=${__value.raw}" }] }] }
+        ]
+      },
       "transformations": [
         { "id": "merge", "options": {} },
         { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "resource_name": "VM", "metric": "Metric", "Value": "Value", "vcenter": "vCenter" } } }

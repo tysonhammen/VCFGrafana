@@ -4,7 +4,16 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    { "title": "Overview", "url": "/d/vcenter-overview", "type": "dashboard", "asDropdown": true },
+    { "title": "Clusters", "url": "/d/vcenter-clusters", "type": "dashboard", "asDropdown": false },
+    { "title": "Hosts", "url": "/d/vcenter-hosts", "type": "dashboard", "asDropdown": false },
+    { "title": "Host Performance", "url": "/d/vcenter-host-performance", "type": "dashboard", "asDropdown": false },
+    { "title": "VMs", "url": "/d/vcenter-vms", "type": "dashboard", "asDropdown": false },
+    { "title": "VM Performance", "url": "/d/vcenter-vm-performance", "type": "dashboard", "asDropdown": false },
+    { "title": "Storage", "url": "/d/vcenter-storage", "type": "dashboard", "asDropdown": false },
+    { "title": "vSAN Health", "url": "/d/vcenter-vsan", "type": "dashboard", "asDropdown": false }
+  ],
   "liveNow": false,
   "panels": [
     {
@@ -12,7 +21,8 @@
       "fieldConfig": {
         "defaults": { "color": { "mode": "thresholds" }, "custom": { "align": "auto" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "Power" }, "properties": [{ "id": "custom.cellOptions", "value": { "type": "color-background" } }, { "id": "mappings", "value": [{ "options": { "POWERED_ON": { "color": "green", "index": 0 } }, "type": "value" }, { "options": { "POWERED_OFF": { "color": "gray", "index": 0 } }, "type": "value" }, { "options": { "SUSPENDED": { "color": "yellow", "index": 0 } }, "type": "value" }, { "options": { "UNKNOWN": { "color": "orange", "index": 0 } }, "type": "value" }] }] }
+          { "matcher": { "id": "byName", "options": "Power" }, "properties": [{ "id": "custom.cellOptions", "value": { "type": "color-background" } }, { "id": "mappings", "value": [{ "options": { "POWERED_ON": { "color": "green", "index": 0 } }, "type": "value" }, { "options": { "POWERED_OFF": { "color": "gray", "index": 0 } }, "type": "value" }, { "options": { "SUSPENDED": { "color": "yellow", "index": 0 } }, "type": "value" }, { "options": { "UNKNOWN": { "color": "orange", "index": 0 } }, "type": "value" }] }] },
+          { "matcher": { "id": "byName", "options": "Name" }, "properties": [{ "id": "links", "value": [{ "title": "View VM performance", "url": "/d/vcenter-vm-performance?var-vm=${__value.raw}" }] }] }
         ]
       },
       "gridPos": { "h": 16, "w": 24, "x": 0, "y": 0 },
