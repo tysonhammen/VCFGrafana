@@ -40,12 +40,16 @@ def _chunk(lst: list, size: int) -> list:
 def _normalize_percent_value(metric_name: str, value: float) -> float:
     """Normalize percent-like metrics to 0-100 for consistent dashboard display.
     Handles vSphere returning 0-1 or values > 100 (e.g. raw or wrong unit).
+    Excludes cpu.usagemhz (MHz) and other non-percent metrics.
     """
     try:
         v = float(value)
     except (TypeError, ValueError):
         return value
     m = (metric_name or "").lower()
+    # Do not treat MHz or other non-percent metrics as percent
+    if "usagemhz" in m or "mhz" in m:
+        return v
     if "usage" not in m and "util" not in m:
         return v
     if v > 100:
