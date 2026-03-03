@@ -7,6 +7,7 @@ Exposes:
 - vcenter_datastore_* (storage)
 - vcenter_vm_* (VMs)
 - vcenter_perf_* (host and VM performance from vStats when available)
+- vcenter_vsan_* (vSAN cluster health when pyvmomi + optional vsanapiutils available)
 """
 
 import logging
@@ -21,6 +22,7 @@ from prometheus_client.core import GaugeMetricFamily, REGISTRY
 
 from .vcenter_client import VCenterClient, VCenterAPIError
 from . import perf_manager
+from . import vsan_manager
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +107,9 @@ class VCenterCollector:
         perf_max_vms: int = 0,
         perf_async: bool = False,
         perf_interval_sec: int = 300,
+        collect_vsan: bool = True,
+        vsan_async: bool = True,
+        vsan_interval_sec: int = 300,
     ):
         self.client = client
         self.vcenter_instance = vcenter_instance or "default"
@@ -114,9 +119,15 @@ class VCenterCollector:
         self.perf_max_vms = perf_max_vms
         self.perf_async = perf_async
         self.perf_interval_sec = max(10, perf_interval_sec)
+        self.collect_vsan = collect_vsan
+        self.vsan_async = vsan_async
+        self.vsan_interval_sec = max(60, vsan_interval_sec)
         self._perf_cache: Optional[tuple[list[tuple[str, str, str, float]], dict[str, str], dict[str, str]]] = None
         self._perf_lock = threading.Lock()
         self._perf_stop = threading.Event()
+        self._vsan_cache: Optional[list[dict[str, Any]]] = None
+        self._vsan_lock = threading.Lock()
+        self._vsan_stop = threading.Event()
         if collect_perf and perf_async:
             self._perf_thread = threading.Thread(target=self._perf_background_loop, daemon=True)
             self._perf_thread.start()
@@ -126,6 +137,15 @@ class VCenterCollector:
             )
         else:
             self._perf_thread = None
+        if collect_vsan and vsan_async:
+            self._vsan_thread = threading.Thread(target=self._vsan_background_loop, daemon=True)
+            self._vsan_thread.start()
+            logger.info(
+                "vSAN health collection running in background (interval=%ds); scrapes will serve cached vSAN metrics.",
+                self.vsan_interval_sec,
+            )
+        else:
+            self._vsan_thread = None
 
     def collect(self):
         """Yield Prometheus metrics from vCenter."""
@@ -135,6 +155,7 @@ class VCenterCollector:
             yield from self._collect_datastores()
             yield from self._collect_vms()
             yield from self._collect_performance()
+            yield from self._collect_vsan()
             # Signal successful scrape
             err = GaugeMetricFamily(
                 "vcenter_scrape_error",
@@ -316,6 +337,19 @@ class VCenterCollector:
             if not available:
                 logger.debug("vStats metrics: empty list")
             else:
+                types_list = sorted(
+                    set(
+                        (m.split(".")[0].lower() if "." in str(m) else str(m).lower())
+                        for m in available
+                        if m
+                    )
+                )
+                logger.info(
+                    "vStats: available metric types for host/VM: %s (%d metrics)",
+                    ", ".join(types_list),
+                    len(available),
+                )
+                logger.debug("vStats: all metric names: %s", sorted(available))
                 metrics_to_use = list(dict.fromkeys(m for m in (VSTATS_METRICS_HOST + VSTATS_METRICS_VM) if m in available))
                 if not metrics_to_use:
                     metrics_to_use = available[:10]
@@ -441,6 +475,83 @@ class VCenterCollector:
                 if all_points:
                     logger.debug("Background perf: cached %d points from %d batches", len(all_points), len(batches))
             self._perf_stop.wait(timeout=self.perf_interval_sec)
+
+    def _vsan_background_loop(self) -> None:
+        """Daemon loop: refresh vSAN health cache every vsan_interval_sec."""
+        self._vsan_stop.wait(timeout=min(10, self.vsan_interval_sec))
+        if self._vsan_stop.is_set():
+            return
+        while not self._vsan_stop.is_set():
+            try:
+                data = vsan_manager.query_vsan_health(
+                    server=self.client.server,
+                    user=self.client.user,
+                    password=self.client.password,
+                    verify_ssl=self.client.verify_ssl,
+                )
+                with self._vsan_lock:
+                    self._vsan_cache = data
+                if data:
+                    logger.debug("vSAN health: cached %d clusters", len(data))
+            except Exception as e:
+                logger.debug("vSAN background collection failed: %s", e, exc_info=True)
+            self._vsan_stop.wait(timeout=self.vsan_interval_sec)
+
+    def _collect_vsan(self):
+        """Yield vSAN cluster health metrics (from cache if async, else query once)."""
+        if not self.collect_vsan:
+            logger.debug("vSAN collection disabled (VCENTER_COLLECT_VSAN=0)")
+            return
+        if self.vsan_async:
+            with self._vsan_lock:
+                data = self._vsan_cache
+            if not data:
+                return
+        else:
+            try:
+                data = vsan_manager.query_vsan_health(
+                    server=self.client.server,
+                    user=self.client.user,
+                    password=self.client.password,
+                    verify_ssl=self.client.verify_ssl,
+                )
+            except Exception as e:
+                logger.debug("vSAN collection failed: %s", e, exc_info=True)
+                return
+        if not data:
+            return
+        # Cluster health score: 0-100 (green/yellow/red often reported as numeric)
+        cluster_gauge = GaugeMetricFamily(
+            "vcenter_vsan_cluster_health_score",
+            "vSAN cluster health score (0-100; from QueryClusterHealthSummary)",
+            labels=["vcenter", "cluster_id", "cluster_name"],
+        )
+        # Per-host status: 1=green, 0.5=yellow, 0=red/gray (for graphing)
+        _status_to_value = {"green": 1.0, "yellow": 0.5, "red": 0.0, "gray": 0.0}
+        host_gauge = GaugeMetricFamily(
+            "vcenter_vsan_host_health_status",
+            "vSAN host health status (1=green, 0.5=yellow, 0=red/gray)",
+            labels=["vcenter", "cluster_id", "cluster_name", "host", "status"],
+        )
+        for entry in data:
+            cid = entry.get("cluster_id", "")
+            cname = entry.get("cluster_name", "")
+            score = entry.get("health_score")
+            if score is not None and not (isinstance(score, float) and score != score):  # not nan
+                cluster_gauge.add_metric(
+                    [self.vcenter_instance, cid, cname],
+                    float(score),
+                )
+            for h in entry.get("hosts", []):
+                hostname = h.get("hostname", "")
+                status = (h.get("status") or "").lower().strip()
+                val = _status_to_value.get(status, 0.0)
+                host_gauge.add_metric(
+                    [self.vcenter_instance, cid, cname, hostname, status or "unknown"],
+                    val,
+                )
+        yield cluster_gauge
+        yield host_gauge
 
     def _collect_performance(self):
         """Collect host and VM performance from stats API, with PerformanceManager fallback when REST fails or returns no data."""

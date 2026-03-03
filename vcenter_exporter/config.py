@@ -69,6 +69,13 @@ def get_config():
         perf_interval_sec = int(_strip_value(os.environ.get("VCENTER_PERF_INTERVAL_SEC", "300")) or "300")
     except ValueError:
         perf_interval_sec = 300
+    # vSAN health (cluster score + host status)
+    collect_vsan = _bool(os.environ.get("VCENTER_COLLECT_VSAN", "true"))
+    vsan_async = _bool(os.environ.get("VCENTER_VSAN_ASYNC", "true"))
+    try:
+        vsan_interval_sec = int(_strip_value(os.environ.get("VCENTER_VSAN_INTERVAL_SEC", "300")) or "300")
+    except ValueError:
+        vsan_interval_sec = 300
     return {
         "vcenter_server": server,
         "vcenter_user": user,
@@ -86,4 +93,7 @@ def get_config():
         "perf_max_vms": max(0, perf_max_vms),
         "perf_async": perf_async,
         "perf_interval_sec": max(10, perf_interval_sec),
+        "collect_vsan": collect_vsan,
+        "vsan_async": vsan_async,
+        "vsan_interval_sec": max(60, vsan_interval_sec),
     }

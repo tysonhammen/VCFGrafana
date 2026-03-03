@@ -77,6 +77,9 @@ def main() -> None:
         perf_max_vms=config["perf_max_vms"],
         perf_async=config["perf_async"],
         perf_interval_sec=config["perf_interval_sec"],
+        collect_vsan=config["collect_vsan"],
+        vsan_async=config["vsan_async"],
+        vsan_interval_sec=config["vsan_interval_sec"],
     )
     REGISTRY.register(collector)
 

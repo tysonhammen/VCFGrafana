@@ -90,6 +90,11 @@ EXPORTER_PORT=9680
 # VCENTER_PERF_MAX_VMS=0        # cap VMs queried for perf (0 = no limit)
 # VCENTER_PERF_ASYNC=true      # collect perf in background, serve from cache (avoids scrape timeout)
 # VCENTER_PERF_INTERVAL_SEC=300 # when async, refresh cache every N seconds
+#
+# vSAN health (cluster score + host status; requires pyvmomi):
+# VCENTER_COLLECT_VSAN=true
+# VCENTER_VSAN_ASYNC=true
+# VCENTER_VSAN_INTERVAL_SEC=300
 ```
 
 - **VCENTER_SERVER** – vCenter URL (with `https://`).
@@ -184,6 +189,10 @@ Example Prometheus config with a longer timeout:
     metrics_path: /metrics
 ```
 
+### vSAN health
+
+When **vSAN** is enabled (`VCENTER_COLLECT_VSAN=true`, default), the exporter queries the vSAN Cluster Health API (QueryClusterHealthSummary) and exposes cluster health score and per-host status. Collection runs in a **background thread** when `VCENTER_VSAN_ASYNC=true` (default), so scrapes stay fast. Requires **pyvmomi**; for best compatibility with all vCenter versions, add **vsanapiutils.py** and **vsanmgmtObjects.py** from the [vcf-sdk-python vsan samples](https://github.com/vmware/vcf-sdk-python/tree/main/vsphere-samples/pyvmomi-community-samples/samples/vsan) to your Python path. The **vCenter vSAN Health** Grafana dashboard visualizes these metrics.
+
 ## Exposed metrics
 
 | Metric | Type | Description |
@@ -201,6 +210,8 @@ Example Prometheus config with a longer timeout:
 | `vcenter_vm_memory_mib` | Gauge | Configured memory (MiB) per VM |
 | `vcenter_vm_total` | Gauge | Total number of VMs |
 | `vcenter_perf_value` | Gauge | Host/VM performance (stats API; labels: `vcenter`, `resource_type`, `resource_id`, `resource_name`, `metric`). Only present when the vCenter stats API is available. |
+| `vcenter_vsan_cluster_health_score` | Gauge | vSAN cluster health score 0–100 (labels: `vcenter`, `cluster_id`, `cluster_name`). Only when vSAN collection enabled. |
+| `vcenter_vsan_host_health_status` | Gauge | vSAN host health: 1=green, 0.5=yellow, 0=red/gray (labels: `vcenter`, `cluster_id`, `cluster_name`, `host`, `status`). Only when vSAN collection enabled. |
 | `vcenter_scrape_error` | Gauge | 1 if last scrape failed, 0 on success (for alerting) |
 
 ## API reference

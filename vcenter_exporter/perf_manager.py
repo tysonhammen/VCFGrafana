@@ -65,7 +65,16 @@ def _parse_server_host(server: str) -> tuple[str, int]:
     return server, default_port
 
 
-def _build_counter_map(perf_manager: Any) -> dict[str, int]:
+def _metric_types_from_names(names: list[str]) -> list[str]:
+    """Derive metric type categories from counter names (e.g. cpu.usage.average -> cpu)."""
+    groups: set[str] = set()
+    for n in names:
+        if not n or not isinstance(n, str):
+            continue
+        part = n.split(".")[0].lower() if "." in n else n.lower()
+        if part:
+            groups.add(part)
+    return sorted(groups)
     """Build full_name -> counterId from perfManager.perfCounter (same as vm_perf_example.py)."""
     counter_info: dict[str, int] = {}
     for counter in getattr(perf_manager, "perfCounter", []) or []:
@@ -155,6 +164,18 @@ def query_performance(
             logger.info("PerformanceManager: no perfCounter list from vCenter (performance counters may be disabled)")
             return []
 
+        all_counter_names = sorted(counter_map.keys())
+        types_list = _metric_types_from_names(all_counter_names)
+        logger.info(
+            "PerformanceManager: available metric types for host/VM: %s (counters: %d)",
+            ", ".join(types_list),
+            len(all_counter_names),
+        )
+        logger.debug(
+            "PerformanceManager: all counter names: %s",
+            all_counter_names,
+        )
+
         results: list[tuple[str, str, str, float]] = []
         entities_specs: list[tuple[str, str, Any]] = []
         first_mor_error: Optional[str] = None
@@ -198,6 +219,25 @@ def query_performance(
             n_host = sum(1 for t in entities_specs if t[0] == "HOST")
             n_vm = sum(1 for t in entities_specs if t[0] == "VM")
             logger.debug("PerformanceManager: built %d host, %d VM refs", n_host, n_vm)
+        # Log available metrics per entity type (once for HOST, once for VM)
+        logged_types: set[str] = set()
+        for rtype, rid, entity in entities_specs:
+            if rtype not in logged_types:
+                try:
+                    avail = perf_manager.QueryAvailablePerfMetric(entity=entity)
+                    if avail:
+                        names = sorted(id_to_name.get(m.counterId, str(m.counterId)) for m in avail)
+                        types_list = _metric_types_from_names(names)
+                        logger.info(
+                            "PerformanceManager: available metric types for %s: %s (%d counters)",
+                            rtype,
+                            ", ".join(types_list),
+                            len(names),
+                        )
+                        logger.debug("PerformanceManager: %s counter names: %s", rtype, names)
+                except Exception as e:
+                    logger.debug("PerformanceManager: could not get available metrics for %s: %s", rtype, e)
+                logged_types.add(rtype)
         for rtype, rid, entity in entities_specs:
             metric_ids = _metric_ids_for_entity(perf_manager, counter_map, entity)
             if not metric_ids:

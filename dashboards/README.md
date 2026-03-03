@@ -1,6 +1,6 @@
 # vCenter Grafana dashboards
 
-Pre-built Grafana dashboards show **clusters**, **hosts**, **storage**, **VMs**, and **performance** (CPU/memory for hosts and VMs when the vStats API is available). They use template variables so you can filter by vCenter, cluster, datastore, and power state.
+Pre-built Grafana dashboards show **clusters**, **hosts**, **storage**, **VMs**, **performance** (CPU/memory), and **vSAN health**. They use template variables so you can filter by vCenter, cluster, datastore, and power state.
 
 ## Prerequisites
 
@@ -18,6 +18,7 @@ Pre-built Grafana dashboards show **clusters**, **hosts**, **storage**, **VMs**,
 | **vCenter Storage**  | Datastore free %, capacity, and free space; filter by vCenter and datastore name. |
 | **vCenter VMs**      | Table of all VMs with power state, guest OS, cluster, host; filter by vCenter, cluster, and power state. Power cells are color-coded. |
 | **vCenter VM Performance** | CPU and memory time series and gauges for VMs (requires vStats metrics; see below). |
+| **vCenter vSAN Health**    | vSAN cluster health score and per-host status (green/yellow/red); requires vSAN and pyvmomi (see main README). |
 
 ## Import in Grafana
 
@@ -86,3 +87,7 @@ and use that path in the provider’s `path` option.
 ## Refresh
 
 Dashboards use a **30s** refresh by default. You can change it in the time picker (top right). Because the exporter is scraped on an interval (e.g. 5m), data will only change after each scrape.
+
+## vSAN metrics
+
+The **vCenter vSAN Health** dashboard uses `vcenter_vsan_cluster_health_score` and `vcenter_vsan_host_health_status`, which are populated when the exporter can query the vSAN Cluster Health API (via pyvmomi and optionally vsanapiutils/vsanmgmtObjects from the [vcf-sdk-python samples](https://github.com/vmware/vcf-sdk-python/tree/main/vsphere-samples/pyvmomi-community-samples/samples/vsan)). If vSAN collection is disabled or the API is unavailable, the vSAN dashboard will show no data.
