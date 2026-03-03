@@ -77,9 +77,10 @@
       "options": { "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "expr": "vcenter_perf_value{app=~\"$app\", vcenter=~\"$vcenter\", resource_type=\"VM\", resource_name=~\"$vm\", metric=~\"cpu_usage|cpu_util\"}",
+        "expr": "vcenter_perf_value{app=~\"$app\", vcenter=~\"$vcenter\", resource_type=\"VM\", resource_name=~\"$vm\", metric=~\"cpu_usage_average|cpu_usage_latest|cpu_usagemhz_average|cpu_usagemhz_latest|cpu_usage|cpu_util\"}",
         "legendFormat": "{{ resource_name }}",
-        "refId": "A"
+        "refId": "A",
+        "instant": true
       }],
       "title": "VM CPU (current)",
       "type": "gauge"
@@ -104,7 +105,8 @@
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
         "expr": "vcenter_perf_value{app=~\"$app\", vcenter=~\"$vcenter\", resource_type=\"VM\", resource_name=~\"$vm\", metric=~\"mem_usage_average|mem_usage_latest|mem_usage|mem_util\"}",
         "legendFormat": "{{ resource_name }}",
-        "refId": "A"
+        "refId": "A",
+        "instant": true
       }],
       "title": "VM memory (current)",
       "type": "gauge"

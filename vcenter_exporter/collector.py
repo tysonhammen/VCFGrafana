@@ -37,6 +37,24 @@ def _chunk(lst: list, size: int) -> list:
     return [lst[i : i + size] for i in range(0, len(lst), size)]
 
 
+def _normalize_percent_value(metric_name: str, value: float) -> float:
+    """Normalize percent-like metrics to 0-100 for consistent dashboard display.
+    Handles vSphere returning 0-1 or values > 100 (e.g. raw or wrong unit).
+    """
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return value
+    m = (metric_name or "").lower()
+    if "usage" not in m and "util" not in m:
+        return v
+    if v > 100:
+        return 100.0  # cap at 100
+    if 0 < v <= 1:
+        return v * 100.0  # was 0-1 scale
+    return v
+
+
 def _log_perf_failure(step: str, e: "VCenterAPIError") -> None:
     """Log performance collection failure with a clear cause."""
     code = e.status_code or 0
@@ -443,6 +461,7 @@ class VCenterCollector:
             )
             for (rtype, rid, safe_metric), value in by_key.items():
                 name = host_id_to_name.get(rid) or vm_id_to_name.get(rid) or rid
+                value = _normalize_percent_value(safe_metric, value)
                 gauge.add_metric(
                     [self.vcenter_instance, rtype, rid, name, safe_metric],
                     value,
@@ -516,6 +535,7 @@ class VCenterCollector:
         )
         for (rtype, rid, safe_metric), value in by_key.items():
             name = host_id_to_name.get(rid) or vm_id_to_name.get(rid) or rid
+            value = _normalize_percent_value(safe_metric, value)
             gauge.add_metric(
                 [self.vcenter_instance, rtype, rid, name, safe_metric],
                 value,
